@@ -4,9 +4,16 @@ import typer
 from dualentry_cli.auth import clear_api_key, load_api_key, run_login_flow, store_api_key
 from dualentry_cli.config import Config
 
+from dualentry_cli.commands.invoices import app as invoices_app
+from dualentry_cli.commands.bills import app as bills_app
+from dualentry_cli.commands.accounts import app as accounts_app
+
 app = typer.Typer(name="dualentry", help="DualEntry accounting CLI", no_args_is_help=True)
 auth_app = typer.Typer(help="Authentication commands")
 app.add_typer(auth_app, name="auth")
+app.add_typer(invoices_app, name="invoices")
+app.add_typer(bills_app, name="bills")
+app.add_typer(accounts_app, name="accounts")
 
 def version_callback(value: bool):
     if value:
