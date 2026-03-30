@@ -1,10 +1,13 @@
 """Configuration management for DualEntry CLI."""
+
 from __future__ import annotations
+
 import tomllib
 from pathlib import Path
 
 _DEFAULT_CONFIG_DIR = Path.home() / ".dualentry"
 _CONFIG_FILENAME = "config.toml"
+
 
 class Config:
     def __init__(self, config_dir: Path | None = None):
@@ -19,7 +22,7 @@ class Config:
     def _load(self):
         if not self._config_file.exists():
             return
-        with open(self._config_file, "rb") as f:
+        with self._config_file.open("rb") as f:
             data = tomllib.load(f)
         default = data.get("default", {})
         self.api_url = default.get("api_url", self.api_url)

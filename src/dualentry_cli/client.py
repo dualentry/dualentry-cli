@@ -1,14 +1,19 @@
 """HTTP client for the DualEntry public API."""
+
 from __future__ import annotations
+
 import os
 from typing import Any
+
 import httpx
+
 
 class APIError(Exception):
     def __init__(self, status_code: int, detail: str):
         self.status_code = status_code
         self.detail = detail
         super().__init__(f"HTTP {status_code}: {detail}")
+
 
 class DualEntryClient:
     def __init__(self, api_url: str, api_key: str):
@@ -40,12 +45,37 @@ class DualEntryClient:
         response = self._client.get(path, params=params)
         return self._handle_response(response)
 
+    def paginate(self, path: str, params: dict[str, Any] | None = None, page_size: int = 100, max_items: int | None = None) -> dict:
+        """Fetch all pages and return combined {items: [...], count: N}."""
+        params = dict(params or {})
+        params["limit"] = page_size
+        params["offset"] = 0
+        all_items = []
+
+        while True:
+            data = self.get(path, params=params)
+            items = data.get("items", [])
+            all_items.extend(items)
+            total = data.get("count", len(items))
+            if max_items and len(all_items) >= max_items:
+                all_items = all_items[:max_items]
+                break
+            if len(all_items) >= total or not items:
+                break
+            params["offset"] += page_size
+
+        return {"items": all_items, "count": len(all_items)}
+
     def post(self, path: str, json: dict[str, Any] | None = None) -> dict:
         response = self._client.post(path, json=json)
         return self._handle_response(response)
 
     def put(self, path: str, json: dict[str, Any] | None = None) -> dict:
         response = self._client.put(path, json=json)
+        return self._handle_response(response)
+
+    def delete(self, path: str) -> dict:
+        response = self._client.delete(path)
         return self._handle_response(response)
 
     def close(self):

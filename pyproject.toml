@@ -26,6 +26,136 @@ testpaths = ["tests"]
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+    "pytest-cov>=6.0",
     "pytest-mock>=3.14",
     "respx>=0.21",
+    "ruff>=0.11.11",
+    "pre-commit>=4.2",
+]
+
+# ── Ruff ───────────────────────────────────────────────────────────────
+
+[tool.ruff.format]
+quote-style = "preserve"
+
+[tool.ruff]
+line-length = 180
+target-version = "py311"
+exclude = [".venv"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+
+ignore = [
+    "ERA001",
+    "D100",
+    "D101",
+    "D102",
+    "D103",
+    "D104",
+    "D106",
+    "D107",
+    "TD002",
+    "RUF012",
+    "FIX002",
+    "TD003",
+    "D203",
+    "D211",
+    "D212",
+    "PD011",
+    "TRY301",
+    "COM812",
+    "ISC001",
+    "E501",
+    "ANN002",
+    "ANN003",
+    "ANN201",
+    "ANN001",
+    "ANN205",
+    "ANN202",
+    "ANN204",
+    "BLE001",
+    "B008",
+    "TRY002",
+    "B039",
+    "RUF034",
+    "RUF032",
+    "PLW1508",
+    "SIM115",
+    "RUF046",
+
+    # CLI-specific: Typer uses bool args and deferred imports for circular dep avoidance
+    "FBT001",
+    "FBT002",
+    "FBT003",
+    "PLC0415",
+    "PLR0913",
+    "PLR2004",
+    "A002",
+    "TC003",
+    "C901",
+    "ARG001",
+    "PT006",
+    "D105",
+    "D205",
+    "D401",
+    "TRY400",
+    "EM101",
+    "EM102",
+    "TRY003",
+    "SLF001",
+    "UP007",
+    "S101",
+    "S110",
+    "T201",
+    "PLW0603",
+    "PLW2901",
+    "PLR0915",
+    "F841",
+    "SIM105",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    "S101",
+    "PLR2004",
+    "INP001",
+    "PLR0913",
+    "ANN001",
+    "ANN003",
+    "ANN201",
+    "S311",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["dualentry_cli"]
+section-order = [
+    "future",
+    "standard-library",
+    "third-party",
+    "first-party",
+    "local-folder",
+]
+
+[tool.ruff.lint.pycodestyle]
+max-doc-length = 120
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+# ── Coverage ───────────────────────────────────────────────────────────
+
+[tool.coverage.run]
+branch = true
+relative_files = true
+source = ["src/dualentry_cli"]
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+show_missing = true
+exclude_also = [
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
 ]

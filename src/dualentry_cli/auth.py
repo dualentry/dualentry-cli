@@ -1,11 +1,14 @@
 """Authentication for DualEntry CLI - OAuth flow and credential storage."""
+
 from __future__ import annotations
+
 import hashlib
 import secrets
 import socket
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
+
 import httpx
 import keyring
 import typer
@@ -13,19 +16,24 @@ import typer
 _SERVICE_NAME = "dualentry-cli"
 _KEY_NAME = "api_key"
 
+
 def generate_pkce_pair() -> tuple[str, str]:
     verifier = secrets.token_urlsafe(64)
     challenge = hashlib.sha256(verifier.encode()).hexdigest()
     return verifier, challenge
 
+
 def store_api_key(api_key: str) -> None:
     keyring.set_password(_SERVICE_NAME, _KEY_NAME, api_key)
+
 
 def load_api_key() -> str | None:
     return keyring.get_password(_SERVICE_NAME, _KEY_NAME)
 
+
 def clear_api_key() -> None:
     keyring.delete_password(_SERVICE_NAME, _KEY_NAME)
+
 
 def start_authorize(api_url: str, redirect_uri: str, code_challenge: str, state: str) -> str:
     response = httpx.post(
@@ -36,6 +44,7 @@ def start_authorize(api_url: str, redirect_uri: str, code_challenge: str, state:
     response.raise_for_status()
     return response.json()["authorization_url"]
 
+
 def exchange_token(api_url: str, code: str, code_verifier: str, redirect_uri: str) -> dict:
     response = httpx.post(
         f"{api_url.rstrip('/')}/public/v2/oauth/token/",
@@ -45,10 +54,12 @@ def exchange_token(api_url: str, code: str, code_verifier: str, redirect_uri: st
     response.raise_for_status()
     return response.json()
 
+
 def _find_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
+
 
 class _CallbackHandler(BaseHTTPRequestHandler):
     code: str | None = None
@@ -66,6 +77,7 @@ class _CallbackHandler(BaseHTTPRequestHandler):
 
     def log_message(self, format, *args):
         pass
+
 
 def run_login_flow(api_url: str) -> dict:
     port = _find_free_port()
