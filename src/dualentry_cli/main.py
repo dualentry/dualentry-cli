@@ -82,6 +82,9 @@ def version_callback(value: bool):
 @app.callback()
 def main(version: bool = typer.Option(False, "--version", "-v", help="Show version and exit.", callback=version_callback, is_eager=True)):
     """DualEntry accounting CLI."""
+    from dualentry_cli.updater import check_for_updates
+
+    check_for_updates()
 
 
 @auth_app.command()

@@ -4,18 +4,8 @@ Command-line interface for the DualEntry accounting API.
 
 ## Install
 
-### Quick install
-
-```bash
-bash install.sh
-```
-
-Or directly via `uv` / `pipx`:
-
 ```bash
 uv tool install git+https://github.com/dualentry/dualentry-cli.git
-# or
-pipx install git+https://github.com/dualentry/dualentry-cli.git
 ```
 
 ### Prerequisites
