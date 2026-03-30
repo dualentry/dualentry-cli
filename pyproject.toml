@@ -1,0 +1,31 @@
+[project]
+name = "dualentry-cli"
+version = "0.1.0"
+description = "DualEntry accounting CLI"
+requires-python = ">=3.11"
+dependencies = [
+    "typer>=0.12,<1.0",
+    "httpx>=0.27,<1.0",
+    "keyring>=25.0,<26.0",
+    "rich>=13.0,<14.0",
+]
+
+[project.scripts]
+dualentry = "dualentry_cli.main:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dualentry_cli"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-mock>=3.14",
+    "respx>=0.21",
+]
