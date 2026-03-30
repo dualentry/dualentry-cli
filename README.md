@@ -2,20 +2,44 @@
 
 Command-line interface for the DualEntry accounting API.
 
-## Setup
+## Install
+
+### Quick install
+
+```bash
+bash install.sh
+```
+
+Or directly via `uv` / `pipx`:
+
+```bash
+uv tool install git+https://github.com/dualentry/dualentry-cli.git
+# or
+pipx install git+https://github.com/dualentry/dualentry-cli.git
+```
 
 ### Prerequisites
 
 - Python >= 3.11
-- [uv](https://docs.astral.sh/uv/) package manager
+- [uv](https://docs.astral.sh/uv/) or [pipx](https://pipx.pypa.io/)
 
-### Install
+### Upgrade
 
 ```bash
-uv sync
+uv tool upgrade dualentry-cli
+# or
+pipx upgrade dualentry-cli
 ```
 
-For development (includes ruff, pytest, pre-commit):
+### Uninstall
+
+```bash
+uv tool uninstall dualentry-cli
+# or
+pipx uninstall dualentry-cli
+```
+
+### Development setup
 
 ```bash
 uv sync --extra dev

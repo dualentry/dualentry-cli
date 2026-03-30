@@ -4,7 +4,7 @@ set -euo pipefail
 # DualEntry CLI installer
 # Usage: curl -sSL <raw-url>/install.sh | bash
 
-REPO="git+ssh://git@github.com/dualentry/dualentry-cli.git"
+REPO="git+https://github.com/dualentry/dualentry-cli.git"
 TOOL_NAME="dualentry-cli"
 
 echo "Installing DualEntry CLI..."
