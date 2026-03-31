@@ -6,20 +6,17 @@ import os
 import tomllib
 from pathlib import Path
 
+from dualentry_cli._build_info import DEFAULT_API_URL
+
 _DEFAULT_CONFIG_DIR = Path.home() / ".dualentry"
 _CONFIG_FILENAME = "config.toml"
-
-ENVIRONMENTS = {
-    "prod": "https://api.dualentry.com",
-    "dev": "https://api-dev.dualentry.com",
-}
 
 
 class Config:
     def __init__(self, config_dir: Path | None = None):
         self._config_dir = config_dir or _DEFAULT_CONFIG_DIR
         self._config_file = self._config_dir / _CONFIG_FILENAME
-        self.api_url: str = ENVIRONMENTS["prod"]
+        self.api_url: str = DEFAULT_API_URL
         self.output: str = "table"
         self.organization_id: int | None = None
         self.user_email: str | None = None
@@ -40,14 +37,6 @@ class Config:
         auth = data.get("auth", {})
         self.organization_id = auth.get("organization_id")
         self.user_email = auth.get("user_email")
-
-    @property
-    def env_name(self) -> str:
-        """Return the environment name based on the current api_url."""
-        for name, url in ENVIRONMENTS.items():
-            if self.api_url == url:
-                return name
-        return "custom"
 
     @staticmethod
     def _escape_toml_string(value: str) -> str:

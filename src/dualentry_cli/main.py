@@ -10,7 +10,7 @@ from dualentry_cli.commands import make_resource_app
 from dualentry_cli.commands.accounts import app as accounts_app
 from dualentry_cli.commands.bills import app as bills_app
 from dualentry_cli.commands.invoices import app as invoices_app
-from dualentry_cli.config import ENVIRONMENTS, Config
+from dualentry_cli.config import Config
 
 app = typer.Typer(name="dualentry", help="DualEntry accounting CLI", no_args_is_help=True, cls=HelpfulGroup)
 auth_app = typer.Typer(help="Authentication commands", no_args_is_help=True, cls=HelpfulGroup)
@@ -133,25 +133,12 @@ def status():
 def config_show():
     """Show current configuration."""
     config = Config()
-    typer.echo(f"Environment: {config.env_name}")
     typer.echo(f"API URL: {config.api_url}")
     typer.echo(f"Output format: {config.output}")
     if config.user_email:
         typer.echo(f"User: {config.user_email}")
     if config.organization_id:
         typer.echo(f"Organization: {config.organization_id}")
-
-
-@config_app.command("set-env")
-def config_set_env(env: str = typer.Argument(help=f"Environment name: {', '.join(ENVIRONMENTS)}")):
-    """Switch between environments (dev, prod)."""
-    if env not in ENVIRONMENTS:
-        typer.echo(f"Unknown environment '{env}'. Available: {', '.join(ENVIRONMENTS)}")
-        raise typer.Exit(code=1)
-    config = Config()
-    config.api_url = ENVIRONMENTS[env]
-    config.save()
-    typer.echo(f"Switched to {env} ({ENVIRONMENTS[env]})")
 
 
 @config_app.command("set-url")

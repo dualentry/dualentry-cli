@@ -119,8 +119,8 @@ def _transaction_list(
     resource: str = "",
 ):
     table = Table(title=title, show_lines=False)
+    table.add_column("ID", style="dim", justify="right")
     table.add_column("#", style="bold", justify="right")
-    table.add_column("Num", style="dim", justify="right")
     table.add_column("Date", justify="center")
     table.add_column("Company")
     table.add_column(counterparty_label, min_width=16)

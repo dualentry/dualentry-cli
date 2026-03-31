@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-14
+            target: macos-arm64
+          - os: macos-13
+            target: macos-x86_64
+          - os: ubuntu-latest
+            target: linux-x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.12"
+      - name: Stamp version from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          sed -i.bak "s/^version = .*/version = \"$VERSION\"/" pyproject.toml
+          sed -i.bak "s/^__version__ = .*/__version__ = \"$VERSION\"/" src/dualentry_cli/__init__.py
+      - run: uv sync --dev
+      - run: uv run python scripts/build.py
+      - name: Rename binary
+        run: mv dist/dualentry dist/dualentry-${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dualentry-${{ matrix.target }}
+          path: dist/dualentry-${{ matrix.target }}
+
+  upload:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Upload binaries to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for f in artifacts/*; do
+            gh release upload "${{ github.event.release.tag_name }}" "$f" --repo "${{ github.repository }}"
+          done

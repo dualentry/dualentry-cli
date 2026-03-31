@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 import typer
@@ -21,14 +20,6 @@ Status = typer.Option(None, "--status", help="Filter by status (draft, posted, a
 StartDate = typer.Option(None, "--start-date", help="Filter from date (YYYY-MM-DD)")
 EndDate = typer.Option(None, "--end-date", help="Filter to date (YYYY-MM-DD)")
 Format = typer.Option("human", "--format", "-o", help="Output format: human or json")
-
-_PREFIX_RE = re.compile(r"^[A-Z]{1,3}-(\d+)$")
-
-
-def _strip_prefix(value: str) -> str:
-    """Strip record prefix if present: 'IN-136159' -> '136159'."""
-    m = _PREFIX_RE.match(value)
-    return m.group(1) if m else value
 
 
 def _build_filter_params(
@@ -98,13 +89,13 @@ def make_resource_app(
 
         @app.command("get")
         def get_cmd_with_number(
-            number: str = typer.Argument(help="Record number (the Num column, not the # ID)"),
+            number: str = typer.Argument(help="Record number (the # column)"),
             output: str = Format,
         ):
             from dualentry_cli.main import get_client
 
             client = get_client()
-            data = client.get(f"/{path}/{_strip_prefix(number)}/")
+            data = client.get(f"/{path}/{number}/")
             format_output(data, resource=resource, fmt=output)
 
         get_cmd_with_number.__doc__ = f"Get a {resource} by number."

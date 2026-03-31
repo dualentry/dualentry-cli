@@ -48,10 +48,10 @@ class TestAuthorize:
         from dualentry_cli.auth import _authorize
 
         route = respx.post("https://api.dualentry.com/public/v2/oauth/authorize/").mock(
-            return_value=httpx.Response(200, json={"authorization_url": "https://authkit.workos.com/authorize?state=abc"})
+            return_value=httpx.Response(200, json={"authorization_url": "https://auth.example.com/authorize?state=abc"})
         )
         url = _authorize("https://api.dualentry.com", "http://localhost:9876/callback", "challenge", "state")
-        assert url == "https://authkit.workos.com/authorize?state=abc"
+        assert url == "https://auth.example.com/authorize?state=abc"
         assert route.called
 
 

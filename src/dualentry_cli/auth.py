@@ -88,7 +88,15 @@ def _authorize(api_url: str, redirect_uri: str, code_challenge: str, state: str)
         },
         timeout=30.0,
     )
-    response.raise_for_status()
+    try:
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        try:
+            detail = exc.response.json()
+        except Exception:
+            detail = exc.response.text
+        typer.echo(f"Authorization failed (HTTP {exc.response.status_code}): {detail}", err=True)
+        raise typer.Exit(code=1) from None
     return response.json()["authorization_url"]
 
 
@@ -104,7 +112,15 @@ def _exchange_code(api_url: str, code: str, code_verifier: str, redirect_uri: st
         },
         timeout=30.0,
     )
-    response.raise_for_status()
+    try:
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        try:
+            detail = exc.response.json()
+        except Exception:
+            detail = exc.response.text
+        typer.echo(f"Token exchange failed (HTTP {exc.response.status_code}): {detail}", err=True)
+        raise typer.Exit(code=1) from None
     return response.json()
 
 
@@ -165,7 +181,12 @@ def run_login_flow(api_url: str) -> dict:
     typer.echo(f"If the browser doesn't open, visit: {auth_url}")
     webbrowser.open(auth_url)
 
-    server.handle_request()
+    try:
+        server.handle_request()
+    except KeyboardInterrupt:
+        server.server_close()
+        typer.echo("\nLogin cancelled.")
+        raise typer.Exit(code=1) from None
     server.server_close()
 
     if not _CallbackHandler.code:

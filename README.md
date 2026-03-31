@@ -4,34 +4,36 @@ Command-line interface for the DualEntry accounting API.
 
 ## Install
 
-**Production** (default — connects to `api.dualentry.com`):
+```bash
+brew install dualentry/tap/dualentry
+```
+
+Or with uv:
 
 ```bash
 uv tool install git+https://github.com/dualentry/dualentry-cli.git
 ```
 
-**Development** (connects to `api-dev.dualentry.com`):
+Or via the install script:
 
 ```bash
-uv tool install git+https://github.com/dualentry/dualentry-cli.git
-dualentry config set-env dev
+curl -fsSL https://raw.githubusercontent.com/dualentry/dualentry-cli/main/install.sh | sh
 ```
 
 ### Prerequisites
 
-- Python >= 3.11
-- [uv](https://docs.astral.sh/uv/) or [pipx](https://pipx.pypa.io/)
+- macOS (arm64, x86_64) or Linux (x86_64)
 
 ### Upgrade
 
 ```bash
-uv tool upgrade dualentry-cli
+brew upgrade dualentry
 ```
 
 ### Uninstall
 
 ```bash
-uv tool uninstall dualentry-cli
+brew uninstall dualentry
 ```
 
 ## Authentication
@@ -42,22 +44,14 @@ uv tool uninstall dualentry-cli
 dualentry auth login
 ```
 
-Opens a browser window for WorkOS AuthKit authentication. Tokens are stored in your system keychain.
+Opens a browser window for authentication. API key is stored in your system keychain.
 
 ### API key (environment variable)
 
-For dev/CI environments, you can skip OAuth and use an API key directly:
+For CI environments, you can skip OAuth and use an API key directly:
 
 ```bash
 export X_API_KEY=your_api_key
-dualentry invoices list
-```
-
-Combine with a dev API URL:
-
-```bash
-export X_API_KEY=your_api_key
-export DUALENTRY_API_URL=https://api-dev.dualentry.com
 dualentry invoices list
 ```
 
@@ -74,21 +68,14 @@ dualentry auth logout
 # Show current config
 dualentry config show
 
-# Switch to dev environment
-dualentry config set-env dev
-
-# Switch back to prod
-dualentry config set-env prod
-
 # Set a custom API URL
-dualentry config set-url https://my-staging.example.com
+dualentry config set-url https://api.dualentry.com
 ```
 
 **Environment variables** (override config file):
 
 | Variable | Description |
 |----------|-------------|
-| `DUALENTRY_API_URL` | API base URL (overrides config) |
 | `X_API_KEY` | API key (skips OAuth) |
 
 **Config file** is stored at `~/.dualentry/config.toml`.
@@ -147,19 +134,12 @@ Each resource supports `list` and `get`. Most also support `create` and `update`
 
 ## Development
 
-### Development setup
+### Setup
 
 ```bash
-uv sync --extra dev
-```
-
-### Pre-commit hooks
-
-```bash
+uv sync --dev
 uv run pre-commit install
 ```
-
-Hooks run `ruff check --fix` and `ruff format` on each commit.
 
 ### Linting
 
@@ -170,16 +150,8 @@ uv run ruff format --check .
 
 ### Tests
 
-Unit tests (mocked, no API needed):
-
 ```bash
 uv run pytest
-```
-
-Integration tests (requires running API server):
-
-```bash
-X_API_KEY=your_key DUALENTRY_API_URL=https://api-dev.dualentry.com uv run pytest tests/test_integration.py -v
 ```
 
 With coverage:

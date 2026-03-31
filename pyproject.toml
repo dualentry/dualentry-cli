@@ -31,6 +31,7 @@ dev = [
     "respx>=0.21",
     "ruff>=0.11.11",
     "pre-commit>=4.2",
+    "pyinstaller>=6.0",
 ]
 
 [dependency-groups]
@@ -41,6 +42,7 @@ dev = [
     "respx>=0.21",
     "ruff>=0.11.11",
     "pre-commit>=4.2",
+    "pyinstaller>=6.0",
 ]
 
 # ── Ruff ───────────────────────────────────────────────────────────────
@@ -127,6 +129,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+"scripts/*" = ["INP001", "S603"]
 "tests/*" = [
     "S101",
     "S105",
