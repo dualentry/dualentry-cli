@@ -7,4 +7,3 @@
 - Table and JSON output formats
 - Pagination, search, and date/status filtering
 - Homebrew tap and install script distribution
-- Auto-update checker
