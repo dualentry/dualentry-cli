@@ -6,24 +6,20 @@ import os
 import tomllib
 from pathlib import Path
 
+from dualentry_cli._build_info import DEFAULT_API_URL
+
 _DEFAULT_CONFIG_DIR = Path.home() / ".dualentry"
 _CONFIG_FILENAME = "config.toml"
-
-ENVIRONMENTS = {
-    "prod": "https://api.dualentry.com",
-    "dev": "https://api-dev.dualentry.com",
-}
 
 
 class Config:
     def __init__(self, config_dir: Path | None = None):
         self._config_dir = config_dir or _DEFAULT_CONFIG_DIR
         self._config_file = self._config_dir / _CONFIG_FILENAME
-        self.api_url: str = ENVIRONMENTS["prod"]
+        self.api_url: str = DEFAULT_API_URL
         self.output: str = "table"
         self.organization_id: int | None = None
         self.user_email: str | None = None
-        self.client_id: str | None = None
         self._load()
         # Env var overrides config file
         env_url = os.environ.get("DUALENTRY_API_URL")
@@ -41,15 +37,6 @@ class Config:
         auth = data.get("auth", {})
         self.organization_id = auth.get("organization_id")
         self.user_email = auth.get("user_email")
-        self.client_id = auth.get("client_id")
-
-    @property
-    def env_name(self) -> str:
-        """Return the environment name based on the current api_url."""
-        for name, url in ENVIRONMENTS.items():
-            if self.api_url == url:
-                return name
-        return "custom"
 
     @staticmethod
     def _escape_toml_string(value: str) -> str:
@@ -64,14 +51,12 @@ class Config:
             f'output = "{self._escape_toml_string(self.output)}"',
             "",
         ]
-        has_auth = any(v is not None for v in (self.organization_id, self.user_email, self.client_id))
+        has_auth = any(v is not None for v in (self.organization_id, self.user_email))
         if has_auth:
             lines.append("[auth]")
             if self.organization_id is not None:
                 lines.append(f"organization_id = {self.organization_id}")
             if self.user_email is not None:
                 lines.append(f'user_email = "{self._escape_toml_string(self.user_email)}"')
-            if self.client_id is not None:
-                lines.append(f'client_id = "{self._escape_toml_string(self.client_id)}"')
             lines.append("")
         self._config_file.write_text("\n".join(lines))

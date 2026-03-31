@@ -16,23 +16,14 @@ class APIError(Exception):
 
 
 class DualEntryClient:
-    def __init__(self, api_url: str, *, access_token: str | None = None, refresh_token: str | None = None, client_id: str | None = None, api_key: str | None = None):
+    def __init__(self, api_url: str, *, api_key: str):
         self._api_url = api_url.rstrip("/")
         self._base_url = f"{self._api_url}/public/v2"
-        self._access_token = access_token
-        self._refresh_token = refresh_token
-        self._client_id = client_id
-        self._api_key = api_key
-
-        headers = self._build_headers()
-        self._client = httpx.Client(base_url=self._base_url, headers=headers, timeout=30.0)
-
-    def _build_headers(self) -> dict[str, str]:
-        if self._api_key:
-            return {"X-API-KEY": self._api_key}
-        if self._access_token:
-            return {"Authorization": f"Bearer {self._access_token}"}
-        return {}
+        self._client = httpx.Client(
+            base_url=self._base_url,
+            headers={"X-API-KEY": api_key},
+            timeout=30.0,
+        )
 
     @classmethod
     def from_env(cls, api_url: str) -> DualEntryClient:
@@ -42,28 +33,9 @@ class DualEntryClient:
             raise ValueError(msg)
         return cls(api_url=api_url, api_key=api_key)
 
-    def _try_refresh(self) -> bool:
-        """Attempt to refresh the access token. Returns True if successful."""
-        if not self._refresh_token or not self._client_id:
-            return False
-        try:
-            from dualentry_cli.auth import refresh_access_token, store_tokens
-
-            mcp_url = f"{self._api_url}/mcp"
-            token_response = refresh_access_token(mcp_url, self._client_id, self._refresh_token)
-            self._access_token = token_response["access_token"]
-            self._refresh_token = token_response.get("refresh_token", self._refresh_token)
-            store_tokens(self._access_token, self._refresh_token)
-            self._client.headers.update({"Authorization": f"Bearer {self._access_token}"})
-        except Exception as exc:
-            import sys
-
-            print(f"Token refresh failed: {exc}. Re-login with: dualentry auth login", file=sys.stderr)
-            return False
-        else:
-            return True
-
     def _handle_response(self, response: httpx.Response) -> dict:
+        if response.status_code == 401:
+            raise APIError(401, "API key is invalid or expired. Run: dualentry auth login")
         if response.status_code >= 400:
             try:
                 detail = response.json()
@@ -74,8 +46,6 @@ class DualEntryClient:
 
     def _request(self, method: str, path: str, **kwargs) -> dict:
         response = self._client.request(method, path, **kwargs)
-        if response.status_code in (401, 403) and self._access_token and self._try_refresh():
-            response = self._client.request(method, path, **kwargs)
         return self._handle_response(response)
 
     def get(self, path: str, params: dict[str, Any] | None = None) -> dict:
@@ -87,7 +57,7 @@ class DualEntryClient:
         params["limit"] = page_size
         params["offset"] = 0
         all_items = []
-        max_pages = 1000  # safety guard against infinite loops
+        max_pages = 1000
 
         for _ in range(max_pages):
             data = self.get(path, params=params)

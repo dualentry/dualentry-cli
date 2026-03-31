@@ -89,7 +89,7 @@ def make_resource_app(
 
         @app.command("get")
         def get_cmd_with_number(
-            number: int = typer.Argument(help="Record number"),
+            number: str = typer.Argument(help="Record number (the # column)"),
             output: str = Format,
         ):
             from dualentry_cli.main import get_client

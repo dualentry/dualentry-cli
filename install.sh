@@ -1,28 +1,56 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -e
 
-# DualEntry CLI installer
-# Usage: curl -sSL <raw-url>/install.sh | bash
+REPO="dualentry/dualentry-cli"
+INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 
-REPO="git+https://github.com/dualentry/dualentry-cli.git"
-TOOL_NAME="dualentry-cli"
+get_arch() {
+  case "$(uname -m)" in
+    x86_64|amd64) echo "x86_64" ;;
+    arm64|aarch64) echo "arm64" ;;
+    *) echo "Unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+  esac
+}
 
-echo "Installing DualEntry CLI..."
+get_os() {
+  case "$(uname -s)" in
+    Darwin) echo "macos" ;;
+    Linux) echo "linux" ;;
+    *) echo "Unsupported OS: $(uname -s)" >&2; exit 1 ;;
+  esac
+}
 
-# Prefer uv, fall back to pipx
-if command -v uv &>/dev/null; then
-    echo "Using uv..."
-    uv tool install "$REPO"
-elif command -v pipx &>/dev/null; then
-    echo "Using pipx..."
-    pipx install "$REPO"
-else
-    echo "Error: requires uv or pipx"
-    echo ""
-    echo "Install uv:   curl -LsSf https://astral.sh/uv/install.sh | sh"
-    echo "Install pipx: brew install pipx && pipx ensurepath"
-    exit 1
+OS=$(get_os)
+ARCH=$(get_arch)
+TARGET="${OS}-${ARCH}"
+
+if [ "$OS" = "linux" ] && [ "$ARCH" = "arm64" ]; then
+  echo "Linux arm64 is not currently supported." >&2
+  exit 1
 fi
 
-echo ""
-echo "Installed! Run: dualentry auth login"
+echo "Detecting latest release..."
+LATEST=$(curl -sI "https://github.com/${REPO}/releases/latest" | grep -i "^location:" | sed 's/.*tag\///' | tr -d '\r')
+
+if [ -z "$LATEST" ]; then
+  echo "Failed to detect latest release." >&2
+  exit 1
+fi
+
+URL="https://github.com/${REPO}/releases/download/${LATEST}/dualentry-${TARGET}"
+
+echo "Downloading dualentry ${LATEST} for ${TARGET}..."
+curl -fSL "$URL" -o /tmp/dualentry
+
+chmod +x /tmp/dualentry
+mkdir -p "$INSTALL_DIR"
+
+if [ -w "$INSTALL_DIR" ]; then
+  mv /tmp/dualentry "$INSTALL_DIR/dualentry"
+else
+  echo "Installing to ${INSTALL_DIR} (requires sudo)..."
+  sudo mv /tmp/dualentry "$INSTALL_DIR/dualentry"
+fi
+
+echo "Installed dualentry to ${INSTALL_DIR}/dualentry"
+echo "Run 'dualentry --help' to get started."

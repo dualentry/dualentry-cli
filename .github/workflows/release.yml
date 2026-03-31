@@ -1,0 +1,113 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-14
+            target: macos-arm64
+          - os: macos-13
+            target: macos-x86_64
+          - os: ubuntu-latest
+            target: linux-x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.12"
+      - name: Stamp version from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          sed -i.bak "s/^version = .*/version = \"$VERSION\"/" pyproject.toml
+          sed -i.bak "s/^__version__ = .*/__version__ = \"$VERSION\"/" src/dualentry_cli/__init__.py
+          rm -f pyproject.toml.bak src/dualentry_cli/__init__.py.bak
+      - run: uv sync --dev
+      - run: uv run python scripts/build.py
+      - name: Rename binary
+        run: mv dist/dualentry dist/dualentry-${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dualentry-${{ matrix.target }}
+          path: dist/dualentry-${{ matrix.target }}
+
+  upload:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Upload binaries to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for f in artifacts/*; do
+            gh release upload "${{ github.event.release.tag_name }}" "$f" --repo "${{ github.repository }}"
+          done
+
+  update-tap:
+    needs: upload
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update Homebrew tap
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          BASE_URL="https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}"
+
+          SHA_ARM64=$(curl -sL "$BASE_URL/dualentry-macos-arm64" | shasum -a 256 | cut -d' ' -f1)
+          SHA_X86_64=$(curl -sL "$BASE_URL/dualentry-macos-x86_64" | shasum -a 256 | cut -d' ' -f1)
+          SHA_LINUX=$(curl -sL "$BASE_URL/dualentry-linux-x86_64" | shasum -a 256 | cut -d' ' -f1)
+
+          cat > /tmp/dualentry.rb << FORMULA
+          class Dualentry < Formula
+            desc "DualEntry accounting CLI"
+            homepage "https://github.com/${{ github.repository }}"
+            version "$VERSION"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "$BASE_URL/dualentry-macos-arm64"
+                sha256 "$SHA_ARM64"
+              else
+                url "$BASE_URL/dualentry-macos-x86_64"
+                sha256 "$SHA_X86_64"
+              end
+            end
+
+            on_linux do
+              url "$BASE_URL/dualentry-linux-x86_64"
+              sha256 "$SHA_LINUX"
+            end
+
+            def install
+              binary = Dir["dualentry-*"].first || "dualentry"
+              bin.install binary => "dualentry"
+            end
+
+            test do
+              assert_match "dualentry-cli", shell_output("#{bin}/dualentry --version")
+            end
+          end
+          FORMULA
+
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/dualentry/homebrew-tap.git" /tmp/tap
+          mkdir -p /tmp/tap/Formula
+          cp /tmp/dualentry.rb /tmp/tap/Formula/dualentry.rb
+          cd /tmp/tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/dualentry.rb
+          git commit -m "Update dualentry to $VERSION"
+          git push

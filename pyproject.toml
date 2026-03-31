@@ -23,16 +23,6 @@ packages = ["src/dualentry_cli"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
-[project.optional-dependencies]
-dev = [
-    "pytest>=8.0",
-    "pytest-cov>=6.0",
-    "pytest-mock>=3.14",
-    "respx>=0.21",
-    "ruff>=0.11.11",
-    "pre-commit>=4.2",
-]
-
 [dependency-groups]
 dev = [
     "pytest>=8.0",
@@ -41,6 +31,7 @@ dev = [
     "respx>=0.21",
     "ruff>=0.11.11",
     "pre-commit>=4.2",
+    "pyinstaller>=6.0",
 ]
 
 # ── Ruff ───────────────────────────────────────────────────────────────
@@ -120,12 +111,14 @@ ignore = [
     "T201",
     "PLW0603",
     "PLW2901",
+    "PLR0912",
     "PLR0915",
     "F841",
     "SIM105",
 ]
 
 [tool.ruff.lint.per-file-ignores]
+"scripts/*" = ["INP001", "S603"]
 "tests/*" = [
     "S101",
     "S105",

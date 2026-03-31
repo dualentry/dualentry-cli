@@ -4,13 +4,13 @@ import os
 
 import typer
 
-from dualentry_cli.auth import clear_credentials, load_tokens, run_login_flow, store_tokens
+from dualentry_cli.auth import clear_credentials, load_api_key, run_login_flow, store_api_key
 from dualentry_cli.cli import HelpfulGroup
 from dualentry_cli.commands import make_resource_app
 from dualentry_cli.commands.accounts import app as accounts_app
 from dualentry_cli.commands.bills import app as bills_app
 from dualentry_cli.commands.invoices import app as invoices_app
-from dualentry_cli.config import ENVIRONMENTS, Config
+from dualentry_cli.config import Config
 
 app = typer.Typer(name="dualentry", help="DualEntry accounting CLI", no_args_is_help=True, cls=HelpfulGroup)
 auth_app = typer.Typer(help="Authentication commands", no_args_is_help=True, cls=HelpfulGroup)
@@ -95,10 +95,11 @@ def login(api_url: str = typer.Option(None, "--api-url", help="API base URL over
     config = Config()
     url = api_url or config.api_url
     result = run_login_flow(api_url=url)
-    store_tokens(result["access_token"], result["refresh_token"])
-    config.client_id = result["client_id"]
+    store_api_key(result["api_key"])
+    config.organization_id = result["organization_id"]
+    config.user_email = result["user_email"]
     config.save()
-    typer.echo("Logged in successfully.")
+    typer.echo(f"Logged in as {result['user_email']} (org {result['organization_id']}).")
 
 
 @auth_app.command()
@@ -115,38 +116,29 @@ def status():
     if env_key:
         typer.echo("Authenticated via X_API_KEY environment variable")
         return
-    access_token, refresh_token = load_tokens()
-    if not access_token:
+    api_key = load_api_key()
+    if not api_key:
         typer.echo("Not logged in. Run: dualentry auth login")
         raise typer.Exit(code=1)
     config = Config()
     typer.echo(f"API URL: {config.api_url}")
-    typer.echo("Authenticated via OAuth tokens")
-    if refresh_token:
-        typer.echo("Refresh token: present")
+    if config.user_email:
+        typer.echo(f"User: {config.user_email}")
+    if config.organization_id:
+        typer.echo(f"Organization: {config.organization_id}")
+    typer.echo("Authenticated via API key")
 
 
 @config_app.command("show")
 def config_show():
     """Show current configuration."""
     config = Config()
-    typer.echo(f"Environment: {config.env_name}")
     typer.echo(f"API URL: {config.api_url}")
     typer.echo(f"Output format: {config.output}")
-    if config.client_id:
-        typer.echo(f"OAuth client ID: {config.client_id}")
-
-
-@config_app.command("set-env")
-def config_set_env(env: str = typer.Argument(help=f"Environment name: {', '.join(ENVIRONMENTS)}")):
-    """Switch between environments (dev, prod)."""
-    if env not in ENVIRONMENTS:
-        typer.echo(f"Unknown environment '{env}'. Available: {', '.join(ENVIRONMENTS)}")
-        raise typer.Exit(code=1)
-    config = Config()
-    config.api_url = ENVIRONMENTS[env]
-    config.save()
-    typer.echo(f"Switched to {env} ({ENVIRONMENTS[env]})")
+    if config.user_email:
+        typer.echo(f"User: {config.user_email}")
+    if config.organization_id:
+        typer.echo(f"Organization: {config.organization_id}")
 
 
 @config_app.command("set-url")
@@ -164,18 +156,11 @@ def get_client():
 
     config = Config()
     env_key = os.environ.get("X_API_KEY")
-    if env_key:
-        return DualEntryClient(api_url=config.api_url, api_key=env_key)
-    access_token, refresh_token = load_tokens()
-    if not access_token:
+    api_key = env_key or load_api_key()
+    if not api_key:
         typer.echo("Not logged in. Run: dualentry auth login")
         raise typer.Exit(code=1)
-    return DualEntryClient(
-        api_url=config.api_url,
-        access_token=access_token,
-        refresh_token=refresh_token,
-        client_id=config.client_id,
-    )
+    return DualEntryClient(api_url=config.api_url, api_key=api_key)
 
 
 if __name__ == "__main__":
