@@ -2,7 +2,7 @@
 
 **Automate your accounting workflows from the command line.**
 
-The DualEntry CLI brings the full power of the DualEntry API to your terminal. Create invoices, sync transactions, and manage your books—all without leaving your workflow.
+The DualEntry CLI brings the full power of the DualEntry API to your terminal. Create invoices, sync transactions, and manage your books: all without leaving your workflow.
 
 ## Why DualEntry CLI?
 
