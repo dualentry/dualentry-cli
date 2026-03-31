@@ -33,6 +33,16 @@ dev = [
     "pre-commit>=4.2",
 ]
 
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=6.0",
+    "pytest-mock>=3.14",
+    "respx>=0.21",
+    "ruff>=0.11.11",
+    "pre-commit>=4.2",
+]
+
 # ── Ruff ───────────────────────────────────────────────────────────────
 
 [tool.ruff.format]
