@@ -5,30 +5,11 @@ import difflib
 import click
 from typer.core import TyperGroup
 
-LOGO = r"""
-                      ***
-                      ***    *
-                      ***  *****       ###########                           ###  ##########               ##
-                      ********         ###      ###  ###     ##     #####    ###  ##          ##  ####   ######## ### ## ###     ###
-                      ******           ###       ### ###     ##   ###  ####  ###  ##          ## #  #### ######## ###### ###     ##
-              ********   *********     ###       ### ###     ##    #    ###  ###  #########   ###    ###   ##     ###     ###   ##
-                   ******              ###       ### ###     ##   #########  ###  ##          ##     ###   ##     ###      ### ###
-                 ********              ###      ###  ###    ###  ###    ###  ###  ##          ##     ###   ##     ###       ## ##
-                ****  ***              ##########     ###### ##  ##########  ###  ##########  ##     ###   ###### ###        ###
-                 **   ***                                                                                                    ##
-                      ***                                                                                                #####
-
-                                       The AI ERP that just works
-"""
-
 
 class HelpfulGroup(TyperGroup):
     """Typer group that shows help + suggestions instead of 'No such command'."""
 
     def format_help(self, ctx, formatter):
-        # Only show logo for the root command (dualentry --help)
-        if ctx.parent is None:
-            click.echo(LOGO)
         super().format_help(ctx, formatter)
 
     def resolve_command(self, ctx, args):
