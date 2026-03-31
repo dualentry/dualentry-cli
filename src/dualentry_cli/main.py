@@ -12,7 +12,7 @@ from dualentry_cli.commands.bills import app as bills_app
 from dualentry_cli.commands.invoices import app as invoices_app
 from dualentry_cli.config import Config
 
-app = typer.Typer(name="dualentry", help="DualEntry accounting CLI", no_args_is_help=True, cls=HelpfulGroup)
+app = typer.Typer(name="dualentry", help="DualEntry accounting CLI", no_args_is_help=True, cls=HelpfulGroup, add_completion=False)
 auth_app = typer.Typer(help="Authentication commands", no_args_is_help=True, cls=HelpfulGroup)
 config_app = typer.Typer(help="Configuration commands", no_args_is_help=True, cls=HelpfulGroup)
 app.add_typer(auth_app, name="auth")
