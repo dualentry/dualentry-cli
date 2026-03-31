@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.svg" alt="DualEntry" width="300">
+  <img src="assets/icon.svg" alt="DualEntry" width="80">
 </p>
 
 # DualEntry CLI
