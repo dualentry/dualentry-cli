@@ -1,161 +1,120 @@
 # DualEntry CLI
 
-Command-line interface for the DualEntry accounting API.
+**Automate your accounting workflows from the command line.**
 
-## Install
+The DualEntry CLI brings the full power of the DualEntry API to your terminal. Create invoices, sync transactions, and manage your books—all without leaving your workflow.
 
-```bash
-brew install dualentry/tap/dualentry
-```
+## Why DualEntry CLI?
 
-Or with uv:
+- **Scriptable accounting** — Automate repetitive tasks like invoice creation, payment reconciliation, and monthly closes
+- **CI/CD ready** — Integrate financial operations into your deployment pipelines
+- **Secure by default** — OAuth authentication with credentials stored in your system keychain
+- **Works everywhere** — macOS, Linux, and Windows support
+
+## Quick Start
+
+### Install
 
 ```bash
 uv tool install git+https://github.com/dualentry/dualentry-cli.git
 ```
 
-Or via the install script:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/dualentry/dualentry-cli/main/install.sh | sh
-```
-
-### Prerequisites
-
-- macOS (arm64, x86_64) or Linux (x86_64)
-
-### Upgrade
-
-```bash
-brew upgrade dualentry
-```
-
-### Uninstall
-
-```bash
-brew uninstall dualentry
-```
-
-## Authentication
-
-### Browser login (OAuth)
+### Authenticate
 
 ```bash
 dualentry auth login
 ```
 
-Opens a browser window for authentication. API key is stored in your system keychain.
+This opens your browser for secure authentication. That's it—you're ready to go.
 
-### API key (environment variable)
-
-For CI environments, you can skip OAuth and use an API key directly:
+### Your first command
 
 ```bash
-export X_API_KEY=your_api_key
 dualentry invoices list
 ```
 
-### Check status
+## Common Workflows
+
+### Create and send an invoice
 
 ```bash
-dualentry auth status
-dualentry auth logout
+dualentry invoices create --file invoice.json
+```
+
+### Export transactions for a date range
+
+```bash
+dualentry journal-entries list --start-date 2025-01-01 --end-date 2025-03-31 --format json
+```
+
+### Automate in CI/CD
+
+Set `X_API_KEY` in your environment for non-interactive authentication:
+
+```bash
+export X_API_KEY=your_api_key
+dualentry bills list --status posted --format json
+```
+
+## Available Resources
+
+| Category | Resources |
+|----------|-----------|
+| **Receivables** | Invoices, Sales Orders, Customer Payments, Credits, Deposits |
+| **Payables** | Bills, Purchase Orders, Vendor Payments, Credits, Refunds |
+| **Accounting** | Journal Entries, Bank Transfers, Fixed Assets, Depreciation |
+| **Master Data** | Customers, Vendors, Items, Accounts, Classifications |
+| **Automation** | Recurring Invoices, Recurring Bills, Workflows, Contracts |
+
+All resources support `list`, `get`, `create`, and `update` operations.
+
+## Output Formats
+
+```bash
+# Human-readable (default)
+dualentry invoices list
+
+# JSON for scripting
+dualentry invoices list --format json
+
+# Fetch all pages
+dualentry invoices list --all
 ```
 
 ## Configuration
 
 ```bash
-# Show current config
+# View current settings
 dualentry config show
 
-# Set a custom API URL
-dualentry config set-url https://api.dualentry.com
+# Switch environments
+dualentry config set-env dev    # Development
+dualentry config set-env prod   # Production
 ```
 
-**Environment variables** (override config file):
+## Requirements
 
-| Variable | Description |
-|----------|-------------|
-| `X_API_KEY` | API key (skips OAuth) |
+- Python 3.11+
+- [uv](https://docs.astral.sh/uv/) (recommended) or [pipx](https://pipx.pypa.io/)
 
-**Config file** is stored at `~/.dualentry/config.toml`.
-
-## Usage
-
-### Common options
-
-All `list` commands support:
-
-| Flag | Short | Description |
-|------|-------|-------------|
-| `--limit` | `-l` | Max items to return (default: 20) |
-| `--offset` | | Offset for pagination |
-| `--all` | `-a` | Fetch all pages |
-| `--search` | `-s` | Free text search |
-| `--status` | | Filter by status (draft, posted, archived) |
-| `--start-date` | | Filter from date (YYYY-MM-DD) |
-| `--end-date` | | Filter to date (YYYY-MM-DD) |
-| `--format` | `-o` | Output format: `human` or `json` |
-
-### Examples
+## Upgrade
 
 ```bash
-# List invoices
-dualentry invoices list
-
-# Get a specific invoice by number
-dualentry invoices get 1001
-
-# Search with filters
-dualentry invoices list --status posted --start-date 2025-01-01 --format json
-
-# Fetch all pages
-dualentry bills list --all
-
-# Create from JSON file
-dualentry invoices create --file invoice.json
+uv tool upgrade dualentry-cli
 ```
 
-### Available resources
+## Documentation
 
-**Money-in:** invoices, sales-orders, customer-payments, customer-credits, customer-prepayments, customer-prepayment-applications, customer-deposits, customer-refunds, cash-sales
+- [API Reference](https://docs.dualentry.com/api)
+- [Authentication Guide](https://docs.dualentry.com/cli/auth)
+- [Webhook Integration](https://docs.dualentry.com/webhooks)
 
-**Money-out:** bills, purchase-orders, vendor-payments, vendor-credits, vendor-prepayments, vendor-prepayment-applications, vendor-refunds, direct-expenses
+## Support
 
-**Accounting:** accounts, journal-entries, bank-transfers, fixed-assets, depreciation-books
+- [GitHub Issues](https://github.com/dualentry/dualentry-cli/issues)
+- [Community Discord](https://discord.gg/dualentry)
+- Enterprise support: support@dualentry.com
 
-**Entities:** customers, vendors, items, companies, classifications
+---
 
-**Recurring:** recurring invoices, recurring bills, recurring journal-entries
-
-**Other:** contracts, budgets, workflows
-
-Each resource supports `list` and `get`. Most also support `create` and `update`.
-
-## Development
-
-### Setup
-
-```bash
-uv sync --dev
-uv run pre-commit install
-```
-
-### Linting
-
-```bash
-uv run ruff check .
-uv run ruff format --check .
-```
-
-### Tests
-
-```bash
-uv run pytest
-```
-
-With coverage:
-
-```bash
-uv run pytest --cov=dualentry_cli --cov-report=term-missing
-```
+Built by [DualEntry](https://dualentry.com) — Modern accounting infrastructure for developers.
