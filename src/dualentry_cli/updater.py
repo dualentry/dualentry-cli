@@ -58,23 +58,30 @@ def _fetch_latest_version() -> str | None:
 
 
 def check_for_updates() -> None:
-    """Check for updates once per day and prompt if a newer version is available."""
+    """Show update notice from last cached check, then refresh cache in background."""
     cache = _read_cache()
-    last_check = cache.get("last_check", 0)
-    now = time.time()
 
-    if now - last_check < _CHECK_INTERVAL:
-        return
-
-    latest = _fetch_latest_version()
-    _write_cache({"last_check": now, "latest_version": latest})
-
-    if latest and latest != __version__ and _is_newer(latest, __version__):
+    # Show cached result immediately (no blocking)
+    cached_latest = cache.get("latest_version")
+    if cached_latest and cached_latest != __version__ and _is_newer(cached_latest, __version__):
         typer.secho(
-            f"\nUpdate available: {__version__} → {latest}. Run: uv tool upgrade dualentry-cli",
+            f"\nUpdate available: {__version__} → {cached_latest}. Run: uv tool upgrade dualentry-cli",
             fg=typer.colors.YELLOW,
             err=True,
         )
+
+    # Refresh cache in background if stale
+    last_check = cache.get("last_check", 0)
+    if time.time() - last_check >= _CHECK_INTERVAL:
+        import threading
+
+        threading.Thread(target=_refresh_update_cache, daemon=True).start()
+
+
+def _refresh_update_cache() -> None:
+    """Fetch latest version and update the cache file (runs in background thread)."""
+    latest = _fetch_latest_version()
+    _write_cache({"last_check": time.time(), "latest_version": latest})
 
 
 def _is_newer(latest: str, current: str) -> bool:
