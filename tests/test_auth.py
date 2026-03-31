@@ -1,3 +1,4 @@
+import base64
 import hashlib
 from unittest.mock import patch
 
@@ -11,7 +12,8 @@ class TestPKCE:
 
         verifier, challenge = _generate_pkce_pair()
         assert len(verifier) >= 43
-        assert challenge == hashlib.sha256(verifier.encode()).hexdigest()
+        expected = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode("ascii")
+        assert challenge == expected
 
 
 class TestCredentialStorage:

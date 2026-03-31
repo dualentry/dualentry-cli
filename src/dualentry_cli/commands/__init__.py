@@ -134,7 +134,7 @@ def make_resource_app(
 
         @app.command("update")
         def update_cmd(
-            record_id: int = typer.Argument(help="Record ID"),
+            record_id: str = typer.Argument(help="Record ID"),
             file: Path = typer.Option(..., "--file", "-f", help="JSON file with update data"),
             output: str = Format,
         ):
@@ -151,7 +151,7 @@ def make_resource_app(
 
         @app.command("delete")
         def delete_cmd(
-            record_id: int = typer.Argument(help="Record ID"),
+            record_id: str = typer.Argument(help="Record ID"),
         ):
             from dualentry_cli.main import get_client
 

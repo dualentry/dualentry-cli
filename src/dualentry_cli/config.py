@@ -51,12 +51,17 @@ class Config:
                 return name
         return "custom"
 
+    @staticmethod
+    def _escape_toml_string(value: str) -> str:
+        """Escape a value for safe inclusion in a TOML double-quoted string."""
+        return value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r")
+
     def save(self):
         self._config_dir.mkdir(parents=True, exist_ok=True)
         lines = [
             "[default]",
-            f'api_url = "{self.api_url}"',
-            f'output = "{self.output}"',
+            f'api_url = "{self._escape_toml_string(self.api_url)}"',
+            f'output = "{self._escape_toml_string(self.output)}"',
             "",
         ]
         has_auth = any(v is not None for v in (self.organization_id, self.user_email, self.client_id))
@@ -65,8 +70,8 @@ class Config:
             if self.organization_id is not None:
                 lines.append(f"organization_id = {self.organization_id}")
             if self.user_email is not None:
-                lines.append(f'user_email = "{self.user_email}"')
+                lines.append(f'user_email = "{self._escape_toml_string(self.user_email)}"')
             if self.client_id is not None:
-                lines.append(f'client_id = "{self.client_id}"')
+                lines.append(f'client_id = "{self._escape_toml_string(self.client_id)}"')
             lines.append("")
         self._config_file.write_text("\n".join(lines))

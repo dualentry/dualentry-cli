@@ -55,7 +55,10 @@ class DualEntryClient:
             self._refresh_token = token_response.get("refresh_token", self._refresh_token)
             store_tokens(self._access_token, self._refresh_token)
             self._client.headers.update({"Authorization": f"Bearer {self._access_token}"})
-        except Exception:
+        except Exception as exc:
+            import sys
+
+            print(f"Token refresh failed: {exc}. Re-login with: dualentry auth login", file=sys.stderr)
             return False
         else:
             return True
@@ -84,8 +87,9 @@ class DualEntryClient:
         params["limit"] = page_size
         params["offset"] = 0
         all_items = []
+        max_pages = 1000  # safety guard against infinite loops
 
-        while True:
+        for _ in range(max_pages):
             data = self.get(path, params=params)
             items = data.get("items", [])
             all_items.extend(items)

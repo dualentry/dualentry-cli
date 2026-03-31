@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import secrets
@@ -43,8 +44,10 @@ _TOKEN_FILE = Path.home() / ".dualentry" / "tokens.json"
 
 
 def _generate_pkce_pair() -> tuple[str, str]:
+    """Generate PKCE code_verifier and code_challenge per RFC 7636."""
     verifier = secrets.token_urlsafe(64)
-    challenge = hashlib.sha256(verifier.encode()).hexdigest()
+    digest = hashlib.sha256(verifier.encode()).digest()
+    challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
     return verifier, challenge
 
 
@@ -193,6 +196,10 @@ class _CallbackHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
+        if parsed.path != "/callback":
+            self.send_response(404)
+            self.end_headers()
+            return
         params = parse_qs(parsed.query)
         _CallbackHandler.code = params.get("code", [None])[0]
         _CallbackHandler.state = params.get("state", [None])[0]
