@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.svg" alt="DualEntry" width="300">
+</p>
+
 # DualEntry CLI
 
 **Automate your accounting workflows from the command line.**
