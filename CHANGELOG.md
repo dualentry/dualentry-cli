@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.7] - 2026-04-01
+
+- Added CONTRIBUTING.md with contribution guidelines
+- Updated README with contribution section
+- CLI refactoring and code improvements
+
 ## [0.1.0] - 2026-03-31
 
 - OAuth browser login with API key storage in system keychain
