@@ -13,6 +13,40 @@ console = Console()
 
 _format: str = "human"
 
+# Resource name → display prefix (e.g. "invoice" → "IN")
+_RECORD_PREFIX: dict[str, str] = {
+    "invoice": "IN",
+    "bill": "BI",
+    "sales-order": "SO",
+    "purchase-order": "PO",
+    "customer-payment": "CP",
+    "customer-credit": "CC",
+    "customer-prepayment": "CPP",
+    "customer-prepayment-application": "CPA",
+    "customer-deposit": "CD",
+    "customer-refund": "CR",
+    "cash-sale": "CS",
+    "direct-expense": "DE",
+    "vendor-payment": "VP",
+    "vendor-credit": "VC",
+    "vendor-prepayment": "VPP",
+    "vendor-prepayment-application": "VPA",
+    "vendor-refund": "VR",
+    "journal-entry": "JE",
+    "bank-transfer": "BT",
+    "fixed-asset": "FA",
+}
+
+
+def _fmt_id(record_id, resource: str = "") -> str:
+    """Format a record ID with its prefix, e.g. 135934 → IN-135934 (matches UI display)."""
+    if record_id is None:
+        return "-"
+    prefix = _RECORD_PREFIX.get(resource, "")
+    if prefix:
+        return f"{prefix}-{record_id}"
+    return str(record_id)
+
 
 def set_format(fmt: str) -> None:
     global _format
@@ -82,8 +116,10 @@ def _transaction_list(
     show_paid: bool = False,
     show_remaining: bool = False,
     show_memo: bool = False,
+    resource: str = "",
 ):
     table = Table(title=title, show_lines=False)
+    table.add_column("ID", style="dim", justify="right")
     table.add_column("#", style="bold", justify="right")
     table.add_column("Date", justify="center")
     table.add_column("Company")
@@ -104,6 +140,7 @@ def _transaction_list(
     for r in items:
         currency = r.get("currency_iso_4217_code", "")
         row = [
+            _fmt_id(r.get("internal_id"), resource),
             str(r.get("number", "")),
             r.get("date", "-"),
             r.get("company_name", "-"),
@@ -137,12 +174,13 @@ def _transaction_detail(
     counterparty_label: str,
     counterparty_field: str,
     due_color: str = "green",
+    resource: str = "",
 ):
     currency = record.get("currency_iso_4217_code") or record.get("company_currency", "")
 
     header = Text()
     header.append(record_type.upper(), style="bold")
-    header.append(f"  #{record.get('number', '')}", style="bold cyan")
+    header.append(f"  {_fmt_id(record.get('internal_id'), resource)}", style="bold cyan")
     status = record.get("record_status", "")
     if status:
         header.append(f"  {status.upper()}", style=_status_color(status))
@@ -170,6 +208,8 @@ def _transaction_detail(
     details = Table.grid(padding=(0, 2))
     details.add_column(style="dim", min_width=16)
     details.add_column()
+    if record.get("number"):
+        details.add_row("Number:", str(record["number"]))
     details.add_row("Date:", record.get("date", "-"))
     if record.get("due_date"):
         details.add_row("Due Date:", record["due_date"])
@@ -229,11 +269,11 @@ def _transaction_detail(
 
 
 def _invoice_list(items):
-    _transaction_list(items, "Invoices", "Customer", "customer_name", show_due_date=True, show_paid=True)
+    _transaction_list(items, "Invoices", "Customer", "customer_name", show_due_date=True, show_paid=True, resource="invoice")
 
 
 def _invoice_detail(r):
-    _transaction_detail(r, "Invoice", "Customer", "customer_name", due_color="green")
+    _transaction_detail(r, "Invoice", "Customer", "customer_name", due_color="green", resource="invoice")
 
 
 _register("invoice", _invoice_list, _invoice_detail)
@@ -243,11 +283,11 @@ _register("invoice", _invoice_list, _invoice_detail)
 
 
 def _bill_list(items):
-    _transaction_list(items, "Bills", "Vendor", "vendor_name", show_due_date=True, show_paid=True)
+    _transaction_list(items, "Bills", "Vendor", "vendor_name", show_due_date=True, show_paid=True, resource="bill")
 
 
 def _bill_detail(r):
-    _transaction_detail(r, "Bill", "Vendor", "vendor_name", due_color="red")
+    _transaction_detail(r, "Bill", "Vendor", "vendor_name", due_color="red", resource="bill")
 
 
 _register("bill", _bill_list, _bill_detail)
@@ -257,11 +297,11 @@ _register("bill", _bill_list, _bill_detail)
 
 
 def _sales_order_list(items):
-    _transaction_list(items, "Sales Orders", "Customer", "customer_name")
+    _transaction_list(items, "Sales Orders", "Customer", "customer_name", resource="sales-order")
 
 
 def _sales_order_detail(r):
-    _transaction_detail(r, "Sales Order", "Customer", "customer_name")
+    _transaction_detail(r, "Sales Order", "Customer", "customer_name", resource="sales-order")
 
 
 _register("sales-order", _sales_order_list, _sales_order_detail)
@@ -271,11 +311,11 @@ _register("sales-order", _sales_order_list, _sales_order_detail)
 
 
 def _purchase_order_list(items):
-    _transaction_list(items, "Purchase Orders", "Vendor", "vendor_name")
+    _transaction_list(items, "Purchase Orders", "Vendor", "vendor_name", resource="purchase-order")
 
 
 def _purchase_order_detail(r):
-    _transaction_detail(r, "Purchase Order", "Vendor", "vendor_name")
+    _transaction_detail(r, "Purchase Order", "Vendor", "vendor_name", resource="purchase-order")
 
 
 _register("purchase-order", _purchase_order_list, _purchase_order_detail)
@@ -285,11 +325,11 @@ _register("purchase-order", _purchase_order_list, _purchase_order_detail)
 
 
 def _cash_sale_list(items):
-    _transaction_list(items, "Cash Sales", "Customer", "customer_name")
+    _transaction_list(items, "Cash Sales", "Customer", "customer_name", resource="cash-sale")
 
 
 def _cash_sale_detail(r):
-    _transaction_detail(r, "Cash Sale", "Customer", "customer_name")
+    _transaction_detail(r, "Cash Sale", "Customer", "customer_name", resource="cash-sale")
 
 
 _register("cash-sale", _cash_sale_list, _cash_sale_detail)
@@ -299,11 +339,11 @@ _register("cash-sale", _cash_sale_list, _cash_sale_detail)
 
 
 def _direct_expense_list(items):
-    _transaction_list(items, "Direct Expenses", "Vendor", "vendor_name")
+    _transaction_list(items, "Direct Expenses", "Vendor", "vendor_name", resource="direct-expense")
 
 
 def _direct_expense_detail(r):
-    _transaction_detail(r, "Direct Expense", "Vendor", "vendor_name")
+    _transaction_detail(r, "Direct Expense", "Vendor", "vendor_name", resource="direct-expense")
 
 
 _register("direct-expense", _direct_expense_list, _direct_expense_detail)
@@ -313,11 +353,11 @@ _register("direct-expense", _direct_expense_list, _direct_expense_detail)
 
 
 def _customer_payment_list(items):
-    _transaction_list(items, "Customer Payments", "Customer", "customer_name", show_memo=True)
+    _transaction_list(items, "Customer Payments", "Customer", "customer_name", show_memo=True, resource="customer-payment")
 
 
 def _customer_payment_detail(r):
-    _transaction_detail(r, "Customer Payment", "Customer", "customer_name")
+    _transaction_detail(r, "Customer Payment", "Customer", "customer_name", resource="customer-payment")
 
 
 _register("customer-payment", _customer_payment_list, _customer_payment_detail)
@@ -327,11 +367,11 @@ _register("customer-payment", _customer_payment_list, _customer_payment_detail)
 
 
 def _customer_credit_list(items):
-    _transaction_list(items, "Customer Credits", "Customer", "customer_name", show_remaining=True)
+    _transaction_list(items, "Customer Credits", "Customer", "customer_name", show_remaining=True, resource="customer-credit")
 
 
 def _customer_credit_detail(r):
-    _transaction_detail(r, "Customer Credit", "Customer", "customer_name")
+    _transaction_detail(r, "Customer Credit", "Customer", "customer_name", resource="customer-credit")
 
 
 _register("customer-credit", _customer_credit_list, _customer_credit_detail)
@@ -341,11 +381,11 @@ _register("customer-credit", _customer_credit_list, _customer_credit_detail)
 
 
 def _customer_prepayment_list(items):
-    _transaction_list(items, "Customer Prepayments", "Customer", "customer_name", show_remaining=True)
+    _transaction_list(items, "Customer Prepayments", "Customer", "customer_name", show_remaining=True, resource="customer-prepayment")
 
 
 def _customer_prepayment_detail(r):
-    _transaction_detail(r, "Customer Prepayment", "Customer", "customer_name")
+    _transaction_detail(r, "Customer Prepayment", "Customer", "customer_name", resource="customer-prepayment")
 
 
 _register("customer-prepayment", _customer_prepayment_list, _customer_prepayment_detail)
@@ -355,11 +395,11 @@ _register("customer-prepayment", _customer_prepayment_list, _customer_prepayment
 
 
 def _customer_prepayment_app_list(items):
-    _transaction_list(items, "Customer Prepayment Applications", "Customer", "customer_name")
+    _transaction_list(items, "Customer Prepayment Applications", "Customer", "customer_name", resource="customer-prepayment-application")
 
 
 def _customer_prepayment_app_detail(r):
-    _transaction_detail(r, "Customer Prepayment Application", "Customer", "customer_name")
+    _transaction_detail(r, "Customer Prepayment Application", "Customer", "customer_name", resource="customer-prepayment-application")
 
 
 _register("customer-prepayment-application", _customer_prepayment_app_list, _customer_prepayment_app_detail)
@@ -369,11 +409,11 @@ _register("customer-prepayment-application", _customer_prepayment_app_list, _cus
 
 
 def _customer_deposit_list(items):
-    _transaction_list(items, "Customer Deposits", "Customer", "customer_name", show_memo=True)
+    _transaction_list(items, "Customer Deposits", "Customer", "customer_name", show_memo=True, resource="customer-deposit")
 
 
 def _customer_deposit_detail(r):
-    _transaction_detail(r, "Customer Deposit", "Customer", "customer_name")
+    _transaction_detail(r, "Customer Deposit", "Customer", "customer_name", resource="customer-deposit")
 
 
 _register("customer-deposit", _customer_deposit_list, _customer_deposit_detail)
@@ -383,11 +423,11 @@ _register("customer-deposit", _customer_deposit_list, _customer_deposit_detail)
 
 
 def _customer_refund_list(items):
-    _transaction_list(items, "Customer Refunds", "Customer", "customer_name")
+    _transaction_list(items, "Customer Refunds", "Customer", "customer_name", resource="customer-refund")
 
 
 def _customer_refund_detail(r):
-    _transaction_detail(r, "Customer Refund", "Customer", "customer_name")
+    _transaction_detail(r, "Customer Refund", "Customer", "customer_name", resource="customer-refund")
 
 
 _register("customer-refund", _customer_refund_list, _customer_refund_detail)
@@ -397,11 +437,11 @@ _register("customer-refund", _customer_refund_list, _customer_refund_detail)
 
 
 def _vendor_payment_list(items):
-    _transaction_list(items, "Vendor Payments", "Vendor", "vendor_name", show_memo=True)
+    _transaction_list(items, "Vendor Payments", "Vendor", "vendor_name", show_memo=True, resource="vendor-payment")
 
 
 def _vendor_payment_detail(r):
-    _transaction_detail(r, "Vendor Payment", "Vendor", "vendor_name")
+    _transaction_detail(r, "Vendor Payment", "Vendor", "vendor_name", resource="vendor-payment")
 
 
 _register("vendor-payment", _vendor_payment_list, _vendor_payment_detail)
@@ -411,11 +451,11 @@ _register("vendor-payment", _vendor_payment_list, _vendor_payment_detail)
 
 
 def _vendor_credit_list(items):
-    _transaction_list(items, "Vendor Credits", "Vendor", "vendor_name", show_remaining=True)
+    _transaction_list(items, "Vendor Credits", "Vendor", "vendor_name", show_remaining=True, resource="vendor-credit")
 
 
 def _vendor_credit_detail(r):
-    _transaction_detail(r, "Vendor Credit", "Vendor", "vendor_name")
+    _transaction_detail(r, "Vendor Credit", "Vendor", "vendor_name", resource="vendor-credit")
 
 
 _register("vendor-credit", _vendor_credit_list, _vendor_credit_detail)
@@ -425,11 +465,11 @@ _register("vendor-credit", _vendor_credit_list, _vendor_credit_detail)
 
 
 def _vendor_prepayment_list(items):
-    _transaction_list(items, "Vendor Prepayments", "Vendor", "vendor_name", show_remaining=True)
+    _transaction_list(items, "Vendor Prepayments", "Vendor", "vendor_name", show_remaining=True, resource="vendor-prepayment")
 
 
 def _vendor_prepayment_detail(r):
-    _transaction_detail(r, "Vendor Prepayment", "Vendor", "vendor_name")
+    _transaction_detail(r, "Vendor Prepayment", "Vendor", "vendor_name", resource="vendor-prepayment")
 
 
 _register("vendor-prepayment", _vendor_prepayment_list, _vendor_prepayment_detail)
@@ -439,11 +479,11 @@ _register("vendor-prepayment", _vendor_prepayment_list, _vendor_prepayment_detai
 
 
 def _vendor_prepayment_app_list(items):
-    _transaction_list(items, "Vendor Prepayment Applications", "Vendor", "vendor_name")
+    _transaction_list(items, "Vendor Prepayment Applications", "Vendor", "vendor_name", resource="vendor-prepayment-application")
 
 
 def _vendor_prepayment_app_detail(r):
-    _transaction_detail(r, "Vendor Prepayment Application", "Vendor", "vendor_name")
+    _transaction_detail(r, "Vendor Prepayment Application", "Vendor", "vendor_name", resource="vendor-prepayment-application")
 
 
 _register("vendor-prepayment-application", _vendor_prepayment_app_list, _vendor_prepayment_app_detail)
@@ -453,11 +493,11 @@ _register("vendor-prepayment-application", _vendor_prepayment_app_list, _vendor_
 
 
 def _vendor_refund_list(items):
-    _transaction_list(items, "Vendor Refunds", "Vendor", "vendor_name")
+    _transaction_list(items, "Vendor Refunds", "Vendor", "vendor_name", resource="vendor-refund")
 
 
 def _vendor_refund_detail(r):
-    _transaction_detail(r, "Vendor Refund", "Vendor", "vendor_name")
+    _transaction_detail(r, "Vendor Refund", "Vendor", "vendor_name", resource="vendor-refund")
 
 
 _register("vendor-refund", _vendor_refund_list, _vendor_refund_detail)
@@ -467,7 +507,7 @@ _register("vendor-refund", _vendor_refund_list, _vendor_refund_detail)
 
 
 def _journal_entry_list(items):
-    _transaction_list(items, "Journal Entries", "Memo", "memo")
+    _transaction_list(items, "Journal Entries", "Memo", "memo", resource="journal-entry")
 
 
 def _journal_entry_detail(r):
@@ -475,7 +515,7 @@ def _journal_entry_detail(r):
 
     header = Text()
     header.append("JOURNAL ENTRY", style="bold")
-    header.append(f"  #{r.get('number', '')}", style="bold cyan")
+    header.append(f"  {_fmt_id(r.get('internal_id'), 'journal-entry')}", style="bold cyan")
     status = r.get("record_status", "")
     if status:
         header.append(f"  {status.upper()}", style=_status_color(status))
@@ -534,7 +574,7 @@ def _bank_transfer_list(items):
         send_currency = r.get("credit_bank_account_currency", "")
         recv_currency = r.get("debit_bank_account_currency", "")
         table.add_row(
-            str(r.get("number", "")),
+            _fmt_id(r.get("internal_id"), "bank-transfer"),
             r.get("date", "-"),
             r.get("company_name", "-"),
             r.get("credit_bank_account_name", "-"),
@@ -550,7 +590,7 @@ def _bank_transfer_list(items):
 def _bank_transfer_detail(r):
     header = Text()
     header.append("BANK TRANSFER", style="bold")
-    header.append(f"  #{r.get('number', '')}", style="bold cyan")
+    header.append(f"  {_fmt_id(r.get('internal_id'), 'bank-transfer')}", style="bold cyan")
     status = r.get("record_status", "")
     if status:
         header.append(f"  {status.upper()}", style=_status_color(status))
@@ -589,7 +629,7 @@ def _fixed_asset_list(items):
 
     for r in items:
         table.add_row(
-            str(r.get("number", "")),
+            _fmt_id(r.get("internal_id"), "fixed-asset"),
             r.get("name", "-"),
             r.get("company_name", "-"),
             r.get("purchase_date", "-"),

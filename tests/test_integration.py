@@ -3,11 +3,9 @@ Integration tests against a live DualEntry API.
 
 Requires:
   - X_API_KEY env var set
-  - API server running (default: http://localhost:8000)
 
 Run:
   X_API_KEY=... pytest tests/test_integration.py -v
-  X_API_KEY=... pytest tests/test_integration.py -v -k invoices
 """
 
 from __future__ import annotations
