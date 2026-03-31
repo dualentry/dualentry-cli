@@ -1,4 +1,4 @@
-<p align="center">
+G<p align="center">
   <img src="assets/icon.svg" alt="DualEntry" width="80">
 </p>
 
@@ -158,7 +158,6 @@ uv run pytest --cov=dualentry_cli --cov-report=term-missing
 ## Support
 
 - [GitHub Issues](https://github.com/dualentry/dualentry-cli/issues)
-- [Community Discord](https://discord.gg/dualentry)
 - Enterprise support: support@dualentry.com
 
 ---
