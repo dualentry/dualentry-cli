@@ -5,11 +5,27 @@ import difflib
 import click
 from typer.core import TyperGroup
 
+LOGO = r"""
+ /$$$$$$$                      /$$                       /$$
+| $$__  $$                    | $$                      | $$
+| $$  \ $$ /$$   /$$  /$$$$$$ | $$  /$$$$$$  /$$$$$$$  /$$$$$$    /$$$$$$  /$$   /$$
+| $$  | $$| $$  | $$ |____  $$| $$ /$$__  $$| $$__  $$|_  $$_/   /$$__  $$| $$  | $$
+| $$  | $$| $$  | $$  /$$$$$$$| $$| $$$$$$$$| $$  \ $$  | $$    | $$  \__/| $$  | $$
+| $$  | $$| $$  | $$ /$$__  $$| $$| $$_____/| $$  | $$  | $$ /$$| $$      | $$  | $$
+| $$$$$$$/|  $$$$$$/|  $$$$$$$| $$|  $$$$$$$| $$  | $$  |  $$$$/| $$      |  $$$$$$$
+|_______/  \______/  \_______/|__/ \_______/|__/  |__/   \___/  |__/       \____  $$
+                                                                           /$$  | $$
+                                                                          |  $$$$$$/
+                                                                           \______/
+"""
+
 
 class HelpfulGroup(TyperGroup):
     """Typer group that shows help + suggestions instead of 'No such command'."""
 
     def format_help(self, ctx, formatter):
+        if ctx.parent is None:
+            click.echo(LOGO)
         super().format_help(ctx, formatter)
 
     def resolve_command(self, ctx, args):
