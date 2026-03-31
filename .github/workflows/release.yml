@@ -58,9 +58,9 @@ jobs:
   update-tap:
     needs: upload
     runs-on: ubuntu-latest
-    if: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
     steps:
       - name: Update Homebrew tap
+        if: ${{ env.TAP_TOKEN != '' }}
         env:
           TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
