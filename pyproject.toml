@@ -11,7 +11,7 @@ dependencies = [
 ]
 
 [project.scripts]
-dualentry = "dualentry_cli.main:app"
+dualentry = "dualentry_cli.main:main_entrypoint"
 
 [build-system]
 requires = ["hatchling"]

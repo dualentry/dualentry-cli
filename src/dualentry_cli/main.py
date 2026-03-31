@@ -163,5 +163,16 @@ def get_client():
     return DualEntryClient(api_url=config.api_url, api_key=api_key)
 
 
+def main_entrypoint():
+    """Entry point with error handling."""
+    from dualentry_cli.client import APIError
+
+    try:
+        app()
+    except APIError as e:
+        typer.secho(f"Error: {e.detail}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from None
+
+
 if __name__ == "__main__":
-    app()
+    main_entrypoint()

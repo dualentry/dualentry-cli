@@ -36,6 +36,8 @@ class DualEntryClient:
     def _handle_response(self, response: httpx.Response) -> dict:
         if response.status_code == 401:
             raise APIError(401, "API key is invalid or expired. Run: dualentry auth login")
+        if response.status_code == 403:
+            raise APIError(403, "API key authentication failed. Run: dualentry auth login")
         if response.status_code >= 400:
             try:
                 detail = response.json()
