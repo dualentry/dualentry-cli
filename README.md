@@ -155,6 +155,10 @@ uv run pytest --cov=dualentry_cli --cov-report=term-missing
 - [Authentication Guide](https://docs.dualentry.com/cli/auth)
 - [Webhook Integration](https://docs.dualentry.com/webhooks)
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, testing, and release instructions.
+
 ## Support
 
 - [GitHub Issues](https://github.com/dualentry/dualentry-cli/issues)
