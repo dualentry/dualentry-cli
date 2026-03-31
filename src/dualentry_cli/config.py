@@ -2,22 +2,33 @@
 
 from __future__ import annotations
 
+import os
 import tomllib
 from pathlib import Path
 
 _DEFAULT_CONFIG_DIR = Path.home() / ".dualentry"
 _CONFIG_FILENAME = "config.toml"
 
+ENVIRONMENTS = {
+    "prod": "https://api.dualentry.com",
+    "dev": "https://api-dev.dualentry.com",
+}
+
 
 class Config:
     def __init__(self, config_dir: Path | None = None):
         self._config_dir = config_dir or _DEFAULT_CONFIG_DIR
         self._config_file = self._config_dir / _CONFIG_FILENAME
-        self.api_url: str = "https://api.dualentry.com"
+        self.api_url: str = ENVIRONMENTS["prod"]
         self.output: str = "table"
         self.organization_id: int | None = None
         self.user_email: str | None = None
+        self.client_id: str | None = None
         self._load()
+        # Env var overrides config file
+        env_url = os.environ.get("DUALENTRY_API_URL")
+        if env_url:
+            self.api_url = env_url
 
     def _load(self):
         if not self._config_file.exists():
@@ -30,6 +41,15 @@ class Config:
         auth = data.get("auth", {})
         self.organization_id = auth.get("organization_id")
         self.user_email = auth.get("user_email")
+        self.client_id = auth.get("client_id")
+
+    @property
+    def env_name(self) -> str:
+        """Return the environment name based on the current api_url."""
+        for name, url in ENVIRONMENTS.items():
+            if self.api_url == url:
+                return name
+        return "custom"
 
     def save(self):
         self._config_dir.mkdir(parents=True, exist_ok=True)
@@ -39,11 +59,14 @@ class Config:
             f'output = "{self.output}"',
             "",
         ]
-        if self.organization_id is not None or self.user_email is not None:
+        has_auth = any(v is not None for v in (self.organization_id, self.user_email, self.client_id))
+        if has_auth:
             lines.append("[auth]")
             if self.organization_id is not None:
                 lines.append(f"organization_id = {self.organization_id}")
             if self.user_email is not None:
                 lines.append(f'user_email = "{self.user_email}"')
+            if self.client_id is not None:
+                lines.append(f'client_id = "{self.client_id}"')
             lines.append("")
         self._config_file.write_text("\n".join(lines))

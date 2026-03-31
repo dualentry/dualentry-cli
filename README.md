@@ -4,8 +4,17 @@ Command-line interface for the DualEntry accounting API.
 
 ## Install
 
+**Production** (default — connects to `api.dualentry.com`):
+
 ```bash
 uv tool install git+https://github.com/dualentry/dualentry-cli.git
+```
+
+**Development** (connects to `api-dev.dualentry.com`):
+
+```bash
+uv tool install git+https://github.com/dualentry/dualentry-cli.git
+dualentry config set-env dev
 ```
 
 ### Prerequisites
@@ -17,22 +26,12 @@ uv tool install git+https://github.com/dualentry/dualentry-cli.git
 
 ```bash
 uv tool upgrade dualentry-cli
-# or
-pipx upgrade dualentry-cli
 ```
 
 ### Uninstall
 
 ```bash
 uv tool uninstall dualentry-cli
-# or
-pipx uninstall dualentry-cli
-```
-
-### Development setup
-
-```bash
-uv sync --extra dev
 ```
 
 ## Authentication
@@ -43,12 +42,22 @@ uv sync --extra dev
 dualentry auth login
 ```
 
-This opens a browser window for WorkOS AuthKit authentication. Credentials are stored in your system keychain.
+Opens a browser window for WorkOS AuthKit authentication. Tokens are stored in your system keychain.
 
 ### API key (environment variable)
 
+For dev/CI environments, you can skip OAuth and use an API key directly:
+
 ```bash
 export X_API_KEY=your_api_key
+dualentry invoices list
+```
+
+Combine with a dev API URL:
+
+```bash
+export X_API_KEY=your_api_key
+export DUALENTRY_API_URL=https://api-dev.dualentry.com
 dualentry invoices list
 ```
 
@@ -58,6 +67,31 @@ dualentry invoices list
 dualentry auth status
 dualentry auth logout
 ```
+
+## Configuration
+
+```bash
+# Show current config
+dualentry config show
+
+# Switch to dev environment
+dualentry config set-env dev
+
+# Switch back to prod
+dualentry config set-env prod
+
+# Set a custom API URL
+dualentry config set-url https://my-staging.example.com
+```
+
+**Environment variables** (override config file):
+
+| Variable | Description |
+|----------|-------------|
+| `DUALENTRY_API_URL` | API base URL (overrides config) |
+| `X_API_KEY` | API key (skips OAuth) |
+
+**Config file** is stored at `~/.dualentry/config.toml`.
 
 ## Usage
 
@@ -113,6 +147,12 @@ Each resource supports `list` and `get`. Most also support `create` and `update`
 
 ## Development
 
+### Development setup
+
+```bash
+uv sync --extra dev
+```
+
 ### Pre-commit hooks
 
 ```bash
@@ -139,7 +179,7 @@ uv run pytest
 Integration tests (requires running API server):
 
 ```bash
-X_API_KEY=your_key uv run pytest tests/test_integration.py -v
+X_API_KEY=your_key DUALENTRY_API_URL=https://api-dev.dualentry.com uv run pytest tests/test_integration.py -v
 ```
 
 With coverage:

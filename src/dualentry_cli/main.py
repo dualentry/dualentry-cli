@@ -4,17 +4,19 @@ import os
 
 import typer
 
-from dualentry_cli.auth import clear_api_key, load_api_key, run_login_flow, store_api_key
+from dualentry_cli.auth import clear_credentials, load_tokens, run_login_flow, store_tokens
 from dualentry_cli.cli import HelpfulGroup
 from dualentry_cli.commands import make_resource_app
 from dualentry_cli.commands.accounts import app as accounts_app
 from dualentry_cli.commands.bills import app as bills_app
 from dualentry_cli.commands.invoices import app as invoices_app
-from dualentry_cli.config import Config
+from dualentry_cli.config import ENVIRONMENTS, Config
 
 app = typer.Typer(name="dualentry", help="DualEntry accounting CLI", no_args_is_help=True, cls=HelpfulGroup)
 auth_app = typer.Typer(help="Authentication commands", no_args_is_help=True, cls=HelpfulGroup)
+config_app = typer.Typer(help="Configuration commands", no_args_is_help=True, cls=HelpfulGroup)
 app.add_typer(auth_app, name="auth")
+app.add_typer(config_app, name="config")
 
 # Custom-formatted resources
 app.add_typer(invoices_app, name="invoices")
@@ -93,20 +95,16 @@ def login(api_url: str = typer.Option(None, "--api-url", help="API base URL over
     config = Config()
     url = api_url or config.api_url
     result = run_login_flow(api_url=url)
-    store_api_key(result["api_key"])
-    config.organization_id = result["organization_id"]
-    config.user_email = result["user_email"]
+    store_tokens(result["access_token"], result["refresh_token"])
+    config.client_id = result["client_id"]
     config.save()
-    typer.echo(f"Logged in as {result['user_email']} (org: {result['organization_id']})")
+    typer.echo("Logged in successfully.")
 
 
 @auth_app.command()
 def logout():
     """Log out and clear stored credentials."""
-    try:
-        clear_api_key()
-    except Exception:
-        pass
+    clear_credentials()
     typer.echo("Logged out.")
 
 
@@ -117,14 +115,47 @@ def status():
     if env_key:
         typer.echo("Authenticated via X_API_KEY environment variable")
         return
-    api_key = load_api_key()
-    if not api_key:
+    access_token, refresh_token = load_tokens()
+    if not access_token:
         typer.echo("Not logged in. Run: dualentry auth login")
         raise typer.Exit(code=1)
     config = Config()
-    typer.echo(f"Logged in as: {config.user_email or 'unknown'}")
-    typer.echo(f"Organization: {config.organization_id or 'unknown'}")
     typer.echo(f"API URL: {config.api_url}")
+    typer.echo("Authenticated via OAuth tokens")
+    if refresh_token:
+        typer.echo("Refresh token: present")
+
+
+@config_app.command("show")
+def config_show():
+    """Show current configuration."""
+    config = Config()
+    typer.echo(f"Environment: {config.env_name}")
+    typer.echo(f"API URL: {config.api_url}")
+    typer.echo(f"Output format: {config.output}")
+    if config.client_id:
+        typer.echo(f"OAuth client ID: {config.client_id}")
+
+
+@config_app.command("set-env")
+def config_set_env(env: str = typer.Argument(help=f"Environment name: {', '.join(ENVIRONMENTS)}")):
+    """Switch between environments (dev, prod)."""
+    if env not in ENVIRONMENTS:
+        typer.echo(f"Unknown environment '{env}'. Available: {', '.join(ENVIRONMENTS)}")
+        raise typer.Exit(code=1)
+    config = Config()
+    config.api_url = ENVIRONMENTS[env]
+    config.save()
+    typer.echo(f"Switched to {env} ({ENVIRONMENTS[env]})")
+
+
+@config_app.command("set-url")
+def config_set_url(url: str = typer.Argument(help="Custom API base URL")):
+    """Set a custom API URL."""
+    config = Config()
+    config.api_url = url
+    config.save()
+    typer.echo(f"API URL set to {url}")
 
 
 def get_client():
@@ -135,11 +166,16 @@ def get_client():
     env_key = os.environ.get("X_API_KEY")
     if env_key:
         return DualEntryClient(api_url=config.api_url, api_key=env_key)
-    api_key = load_api_key()
-    if not api_key:
+    access_token, refresh_token = load_tokens()
+    if not access_token:
         typer.echo("Not logged in. Run: dualentry auth login")
         raise typer.Exit(code=1)
-    return DualEntryClient(api_url=config.api_url, api_key=api_key)
+    return DualEntryClient(
+        api_url=config.api_url,
+        access_token=access_token,
+        refresh_token=refresh_token,
+        client_id=config.client_id,
+    )
 
 
 if __name__ == "__main__":
