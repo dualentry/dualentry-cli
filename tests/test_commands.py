@@ -18,10 +18,10 @@ def mock_get_client():
 
 class TestInvoiceCommands:
     def test_invoices_list(self, mock_get_client):
-        mock_get_client.get.return_value = {"items": [{"id": 1, "number": "INV-001", "total": "100.00"}], "count": 1}
+        mock_get_client.get.return_value = {"items": [{"internal_id": 42, "number": 1, "total": "100.00"}], "count": 1}
         result = runner.invoke(app, ["invoices", "list"])
         assert result.exit_code == 0
-        assert "INV" in result.output
+        assert "IN-42" in result.output
         mock_get_client.get.assert_called_once_with("/invoices/", params={"limit": 20, "offset": 0})
 
     def test_invoices_list_with_pagination(self, mock_get_client):
@@ -38,10 +38,10 @@ class TestInvoiceCommands:
         assert parsed == {"items": [], "count": 0}
 
     def test_invoices_get(self, mock_get_client):
-        mock_get_client.get.return_value = {"id": 1, "number": "INV-001", "total": "100.00"}
+        mock_get_client.get.return_value = {"internal_id": 42, "number": 1, "total": "100.00"}
         result = runner.invoke(app, ["invoices", "get", "1"])
         assert result.exit_code == 0
-        assert "INV-001" in result.output
+        assert "IN-42" in result.output
         mock_get_client.get.assert_called_once_with("/invoices/1/")
 
     def test_invoices_create(self, mock_get_client, tmp_path):

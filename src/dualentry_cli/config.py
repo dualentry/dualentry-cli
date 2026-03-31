@@ -23,7 +23,6 @@ class Config:
         self.output: str = "table"
         self.organization_id: int | None = None
         self.user_email: str | None = None
-        self.client_id: str | None = None
         self._load()
         # Env var overrides config file
         env_url = os.environ.get("DUALENTRY_API_URL")
@@ -41,7 +40,6 @@ class Config:
         auth = data.get("auth", {})
         self.organization_id = auth.get("organization_id")
         self.user_email = auth.get("user_email")
-        self.client_id = auth.get("client_id")
 
     @property
     def env_name(self) -> str:
@@ -64,14 +62,12 @@ class Config:
             f'output = "{self._escape_toml_string(self.output)}"',
             "",
         ]
-        has_auth = any(v is not None for v in (self.organization_id, self.user_email, self.client_id))
+        has_auth = any(v is not None for v in (self.organization_id, self.user_email))
         if has_auth:
             lines.append("[auth]")
             if self.organization_id is not None:
                 lines.append(f"organization_id = {self.organization_id}")
             if self.user_email is not None:
                 lines.append(f'user_email = "{self._escape_toml_string(self.user_email)}"')
-            if self.client_id is not None:
-                lines.append(f'client_id = "{self._escape_toml_string(self.client_id)}"')
             lines.append("")
         self._config_file.write_text("\n".join(lines))

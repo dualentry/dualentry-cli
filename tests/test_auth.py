@@ -15,62 +15,55 @@ class TestPKCE:
         expected = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode("ascii")
         assert challenge == expected
 
+    def test_rfc7636_appendix_b_vector(self):
+        """Verify PKCE uses base64url(SHA256()) per RFC 7636 appendix B."""
+        verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+        expected = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+        actual = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest()).rstrip(b"=").decode("ascii")
+        assert actual == expected
+
 
 class TestCredentialStorage:
-    def test_store_and_load_tokens(self):
-        from dualentry_cli.auth import load_tokens, store_tokens
+    def test_store_and_load_api_key(self):
+        from dualentry_cli.auth import load_api_key, store_api_key
 
         with patch("dualentry_cli.auth.keyring") as mock_keyring:
-            mock_keyring.get_password.side_effect = lambda _svc, key: {"access_token": "acc_123", "refresh_token": "ref_456"}.get(key)
-            store_tokens("acc_123", "ref_456")
-            assert mock_keyring.set_password.call_count == 2
-            access, refresh = load_tokens()
-            assert access == "acc_123"
-            assert refresh == "ref_456"
+            mock_keyring.get_password.return_value = "key_123"
+            store_api_key("key_123")
+            mock_keyring.set_password.assert_called_once_with("dualentry-cli", "api_key", "key_123")
+            key = load_api_key()
+            assert key == "key_123"
 
     def test_clear_credentials(self):
         from dualentry_cli.auth import clear_credentials
 
         with patch("dualentry_cli.auth.keyring") as mock_keyring:
             clear_credentials()
-            assert mock_keyring.delete_password.call_count == 3
+            mock_keyring.delete_password.assert_called_once_with("dualentry-cli", "api_key")
 
 
-class TestRegisterClient:
+class TestAuthorize:
     @respx.mock
-    def test_registers_oauth_client(self):
-        from dualentry_cli.auth import _register_client
+    def test_authorize_returns_url(self):
+        from dualentry_cli.auth import _authorize
 
-        route = respx.post("https://api.dualentry.com/mcp/register").mock(return_value=httpx.Response(200, json={"client_id": "client_abc", "client_secret": ""}))
-        result = _register_client("https://api.dualentry.com/mcp", "http://localhost:9876/callback")
-        assert result["client_id"] == "client_abc"
+        route = respx.post("https://api.dualentry.com/public/v2/oauth/authorize/").mock(
+            return_value=httpx.Response(200, json={"authorization_url": "https://authkit.workos.com/authorize?state=abc"})
+        )
+        url = _authorize("https://api.dualentry.com", "http://localhost:9876/callback", "challenge", "state")
+        assert url == "https://authkit.workos.com/authorize?state=abc"
         assert route.called
 
 
-class TestExchangeToken:
+class TestExchangeCode:
     @respx.mock
-    def test_exchanges_code_for_tokens(self):
-        from dualentry_cli.auth import _exchange_token
+    def test_exchanges_code_for_api_key(self):
+        from dualentry_cli.auth import _exchange_code
 
-        route = respx.post("https://api.dualentry.com/mcp/token").mock(
-            return_value=httpx.Response(200, json={"access_token": "acc_xyz", "refresh_token": "ref_xyz", "expires_in": 43200, "token_type": "Bearer"})
+        route = respx.post("https://api.dualentry.com/public/v2/oauth/token/").mock(
+            return_value=httpx.Response(200, json={"api_key": "org_live_xxxx", "organization_id": 42, "user_email": "test@example.com"})
         )
-        result = _exchange_token(
-            mcp_url="https://api.dualentry.com/mcp", client_id="client_abc", code="auth_code_123", code_verifier="test_verifier", redirect_uri="http://localhost:9876/callback"
-        )
-        assert result["access_token"] == "acc_xyz"
-        assert result["refresh_token"] == "ref_xyz"
-        assert route.called
-
-
-class TestRefreshToken:
-    @respx.mock
-    def test_refreshes_access_token(self):
-        from dualentry_cli.auth import refresh_access_token
-
-        route = respx.post("https://api.dualentry.com/mcp/token").mock(
-            return_value=httpx.Response(200, json={"access_token": "acc_new", "refresh_token": "ref_new", "expires_in": 43200, "token_type": "Bearer"})
-        )
-        result = refresh_access_token(mcp_url="https://api.dualentry.com/mcp", client_id="client_abc", refresh_token="ref_old")
-        assert result["access_token"] == "acc_new"
+        result = _exchange_code("https://api.dualentry.com", "auth_code_123", "test_verifier", "http://localhost:9876/callback")
+        assert result["api_key"] == "org_live_xxxx"
+        assert result["organization_id"] == 42
         assert route.called
