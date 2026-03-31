@@ -58,6 +58,7 @@ jobs:
   update-tap:
     needs: upload
     runs-on: ubuntu-latest
+    if: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
     steps:
       - name: Update Homebrew tap
         env:
@@ -70,25 +71,25 @@ jobs:
           SHA_X86_64=$(curl -sL "$BASE_URL/dualentry-macos-x86_64" | shasum -a 256 | cut -d' ' -f1)
           SHA_LINUX=$(curl -sL "$BASE_URL/dualentry-linux-x86_64" | shasum -a 256 | cut -d' ' -f1)
 
-          cat > /tmp/dualentry.rb << FORMULA
+          cat > /tmp/dualentry.rb <<'FORMULA'
           class Dualentry < Formula
             desc "DualEntry accounting CLI"
-            homepage "https://github.com/${{ github.repository }}"
-            version "$VERSION"
+            homepage "https://github.com/dualentry/dualentry-cli"
+            version "VERSION_PLACEHOLDER"
 
             on_macos do
               if Hardware::CPU.arm?
-                url "$BASE_URL/dualentry-macos-arm64"
-                sha256 "$SHA_ARM64"
+                url "URL_PLACEHOLDER/dualentry-macos-arm64"
+                sha256 "SHA_ARM64_PLACEHOLDER"
               else
-                url "$BASE_URL/dualentry-macos-x86_64"
-                sha256 "$SHA_X86_64"
+                url "URL_PLACEHOLDER/dualentry-macos-x86_64"
+                sha256 "SHA_X86_64_PLACEHOLDER"
               end
             end
 
             on_linux do
-              url "$BASE_URL/dualentry-linux-x86_64"
-              sha256 "$SHA_LINUX"
+              url "URL_PLACEHOLDER/dualentry-linux-x86_64"
+              sha256 "SHA_LINUX_PLACEHOLDER"
             end
 
             def install
@@ -101,6 +102,14 @@ jobs:
             end
           end
           FORMULA
+
+          # Substitute placeholders and strip leading whitespace
+          sed -i "s|VERSION_PLACEHOLDER|$VERSION|g" /tmp/dualentry.rb
+          sed -i "s|URL_PLACEHOLDER|$BASE_URL|g" /tmp/dualentry.rb
+          sed -i "s|SHA_ARM64_PLACEHOLDER|$SHA_ARM64|g" /tmp/dualentry.rb
+          sed -i "s|SHA_X86_64_PLACEHOLDER|$SHA_X86_64|g" /tmp/dualentry.rb
+          sed -i "s|SHA_LINUX_PLACEHOLDER|$SHA_LINUX|g" /tmp/dualentry.rb
+          sed -i 's/^          //' /tmp/dualentry.rb
 
           git clone "https://x-access-token:${TAP_TOKEN}@github.com/dualentry/homebrew-tap.git" /tmp/tap
           mkdir -p /tmp/tap/Formula

@@ -30,7 +30,7 @@ if [ "$OS" = "linux" ] && [ "$ARCH" = "arm64" ]; then
 fi
 
 echo "Detecting latest release..."
-LATEST=$(curl -sI "https://github.com/${REPO}/releases/latest" | grep -i "^location:" | sed 's/.*tag\///' | tr -d '\r')
+LATEST=$(curl -s "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name"' | sed 's/.*: "//;s/".*//')
 
 if [ -z "$LATEST" ]; then
   echo "Failed to detect latest release." >&2
@@ -38,18 +38,19 @@ if [ -z "$LATEST" ]; then
 fi
 
 URL="https://github.com/${REPO}/releases/download/${LATEST}/dualentry-${TARGET}"
+TMPFILE=$(mktemp)
 
 echo "Downloading dualentry ${LATEST} for ${TARGET}..."
-curl -fSL "$URL" -o /tmp/dualentry
+curl -fSL "$URL" -o "$TMPFILE"
 
-chmod +x /tmp/dualentry
+chmod +x "$TMPFILE"
 mkdir -p "$INSTALL_DIR"
 
 if [ -w "$INSTALL_DIR" ]; then
-  mv /tmp/dualentry "$INSTALL_DIR/dualentry"
+  mv "$TMPFILE" "$INSTALL_DIR/dualentry"
 else
   echo "Installing to ${INSTALL_DIR} (requires sudo)..."
-  sudo mv /tmp/dualentry "$INSTALL_DIR/dualentry"
+  sudo mv "$TMPFILE" "$INSTALL_DIR/dualentry"
 fi
 
 echo "Installed dualentry to ${INSTALL_DIR}/dualentry"

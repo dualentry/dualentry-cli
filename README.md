@@ -16,7 +16,19 @@ The DualEntry CLI brings the full power of the DualEntry API to your terminal. C
 ### Install
 
 ```bash
+brew install dualentry/tap/dualentry
+```
+
+Or with uv:
+
+```bash
 uv tool install git+https://github.com/dualentry/dualentry-cli.git
+```
+
+Or via the install script:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dualentry/dualentry-cli/main/install.sh | sh
 ```
 
 ### Authenticate
@@ -84,13 +96,15 @@ dualentry invoices list --all
 ## Configuration
 
 ```bash
-# View current settings
 dualentry config show
-
-# Switch environments
-dualentry config set-env dev    # Development
-dualentry config set-env prod   # Production
 ```
+
+**Environment variables** (override config file):
+
+| Variable | Description |
+|----------|-------------|
+| `DUALENTRY_API_URL` | API base URL (overrides config) |
+| `X_API_KEY` | API key (skips OAuth) |
 
 ## Requirements
 
@@ -101,6 +115,34 @@ dualentry config set-env prod   # Production
 
 ```bash
 uv tool upgrade dualentry-cli
+```
+
+## Development
+
+### Setup
+
+```bash
+uv sync --dev
+uv run pre-commit install
+```
+
+### Linting
+
+```bash
+uv run ruff check .
+uv run ruff format --check .
+```
+
+### Tests
+
+```bash
+uv run pytest
+```
+
+With coverage:
+
+```bash
+uv run pytest --cov=dualentry_cli --cov-report=term-missing
 ```
 
 ## Documentation
