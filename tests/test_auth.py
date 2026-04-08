@@ -54,6 +54,17 @@ class TestAuthorize:
         assert url == "https://auth.example.com/authorize?state=abc"
         assert route.called
 
+    @respx.mock
+    def test_authorize_sends_user_agent(self):
+        from dualentry_cli import USER_AGENT
+        from dualentry_cli.auth import _authorize
+
+        route = respx.post("https://api.dualentry.com/public/v2/oauth/authorize/").mock(
+            return_value=httpx.Response(200, json={"authorization_url": "https://auth.example.com/authorize"})
+        )
+        _authorize("https://api.dualentry.com", "http://localhost:9876/callback", "challenge", "state")
+        assert route.calls[0].request.headers["User-Agent"] == USER_AGENT
+
 
 class TestExchangeCode:
     @respx.mock

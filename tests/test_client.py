@@ -10,6 +10,13 @@ class TestDualEntryClient:
         client = DualEntryClient(api_url="https://api.dualentry.com", api_key="org_live_xxxx_secret")
         assert client._client.headers["X-API-KEY"] == "org_live_xxxx_secret"
 
+    def test_sets_user_agent_header(self):
+        from dualentry_cli import USER_AGENT
+        from dualentry_cli.client import DualEntryClient
+
+        client = DualEntryClient(api_url="https://api.dualentry.com", api_key="test_key")
+        assert client._client.headers["User-Agent"] == USER_AGENT
+
     @respx.mock
     def test_get_request(self):
         from dualentry_cli.client import DualEntryClient
