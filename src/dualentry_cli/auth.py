@@ -16,6 +16,8 @@ import httpx
 import keyring
 import typer
 
+from dualentry_cli import USER_AGENT
+
 _SERVICE_NAME = "dualentry-cli"
 _KEY_NAME_API_KEY = "api_key"
 
@@ -86,6 +88,7 @@ def _authorize(api_url: str, redirect_uri: str, code_challenge: str, state: str)
             "code_challenge_method": "S256",
             "state": state,
         },
+        headers={"User-Agent": USER_AGENT},
         timeout=30.0,
     )
     try:
@@ -110,6 +113,7 @@ def _exchange_code(api_url: str, code: str, code_verifier: str, redirect_uri: st
             "code_verifier": code_verifier,
             "redirect_uri": redirect_uri,
         },
+        headers={"User-Agent": USER_AGENT},
         timeout=30.0,
     )
     try:

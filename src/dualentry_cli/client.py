@@ -7,6 +7,8 @@ from typing import Any
 
 import httpx
 
+from dualentry_cli import USER_AGENT
+
 
 class APIError(Exception):
     def __init__(self, status_code: int, detail: str):
@@ -21,7 +23,10 @@ class DualEntryClient:
         self._base_url = f"{self._api_url}/public/v2"
         self._client = httpx.Client(
             base_url=self._base_url,
-            headers={"X-API-KEY": api_key},
+            headers={
+                "X-API-KEY": api_key,
+                "User-Agent": USER_AGENT,
+            },
             timeout=30.0,
         )
 
