@@ -1,5 +1,8 @@
 # Changelog
 
+## [0.1.1] - 2026-04-09
+
+
 ## [0.1.7] - 2026-04-01
 
 - Added CONTRIBUTING.md with contribution guidelines
