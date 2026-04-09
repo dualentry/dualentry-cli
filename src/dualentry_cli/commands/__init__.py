@@ -52,6 +52,23 @@ def _do_list(client, path: str, resource: str, limit: int, offset: int, all_page
     format_output(data, resource=resource, fmt=output)
 
 
+def _load_json_file(file: Path) -> dict:
+    """Load and validate a JSON file, with helpful error messages."""
+    if not file.exists():
+        typer.secho(f"Error: File not found: {file}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+    try:
+        content = file.read_text()
+    except OSError as e:
+        typer.secho(f"Error: Cannot read file: {e}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from None
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError as e:
+        typer.secho(f"Error: Invalid JSON in {file.name}: {e.msg} at line {e.lineno}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from None
+
+
 # ── Factory ─────────────────────────────────────────────────────────
 
 
@@ -123,7 +140,7 @@ def make_resource_app(
         ):
             from dualentry_cli.main import get_client
 
-            payload = json.loads(file.read_text())
+            payload = _load_json_file(file)
             client = get_client()
             data = client.post(f"/{path}/", json=payload)
             format_output(data, resource=resource, fmt=output)
@@ -140,7 +157,7 @@ def make_resource_app(
         ):
             from dualentry_cli.main import get_client
 
-            payload = json.loads(file.read_text())
+            payload = _load_json_file(file)
             client = get_client()
             data = client.put(f"/{path}/{record_id}/", json=payload)
             format_output(data, resource=resource, fmt=output)

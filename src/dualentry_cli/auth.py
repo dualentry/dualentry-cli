@@ -274,11 +274,19 @@ def run_login_flow(api_url: str) -> dict:
     typer.echo(f"If the browser doesn't open, visit: {auth_url}")
     webbrowser.open(auth_url)
 
+    # Handle multiple requests until we get the callback with code
+    # (browser may send preflight, favicon, or other requests first)
+    server.timeout = 120  # 2 minute timeout
     try:
-        server.handle_request()
+        while _CallbackHandler.code is None:
+            server.handle_request()
     except KeyboardInterrupt:
         server.server_close()
         typer.echo("\nLogin cancelled.")
+        raise typer.Exit(code=1) from None
+    except TimeoutError:
+        server.server_close()
+        typer.echo("Login timed out. Please try again.")
         raise typer.Exit(code=1) from None
     server.server_close()
 
