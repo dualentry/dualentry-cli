@@ -8,8 +8,6 @@ from dualentry_cli.auth import clear_credentials, load_api_key, run_login_flow, 
 from dualentry_cli.cli import HelpfulGroup
 from dualentry_cli.commands import make_resource_app
 from dualentry_cli.commands.accounts import app as accounts_app
-from dualentry_cli.commands.bills import app as bills_app
-from dualentry_cli.commands.invoices import app as invoices_app
 from dualentry_cli.config import Config
 
 app = typer.Typer(name="dualentry", help="DualEntry accounting CLI", no_args_is_help=True, cls=HelpfulGroup)
@@ -18,10 +16,10 @@ config_app = typer.Typer(help="Configuration commands", no_args_is_help=True, cl
 app.add_typer(auth_app, name="auth")
 app.add_typer(config_app, name="config")
 
-# Custom-formatted resources
-app.add_typer(invoices_app, name="invoices")
-app.add_typer(bills_app, name="bills")
-app.add_typer(accounts_app, name="accounts")
+# Custom-formatted resources (use factory - output.py handles formatting via resource name)
+app.add_typer(make_resource_app("invoices", "invoice", "invoices", has_number=True), name="invoices")
+app.add_typer(make_resource_app("bills", "bill", "bills", has_number=True), name="bills")
+app.add_typer(accounts_app, name="accounts")  # Accounts has custom filtering (no status/date filters)
 
 # Money-in
 app.add_typer(make_resource_app("sales orders", "sales-order", "sales-orders", has_number=True), name="sales-orders")
@@ -71,6 +69,9 @@ app.add_typer(recurring_app, name="recurring")
 app.add_typer(make_resource_app("contracts", "contract", "contracts"), name="contracts")
 app.add_typer(make_resource_app("budgets", "budget", "budgets"), name="budgets")
 app.add_typer(make_resource_app("workflows", "workflow", "workflows", has_create=False, has_update=False), name="workflows")
+app.add_typer(make_resource_app("intercompany journal entries", "intercompany-journal-entry", "intercompany-journal-entries", has_number=True), name="intercompany-journal-entries")
+app.add_typer(make_resource_app("paper checks", "paper-check", "paper-checks", has_number=True), name="paper-checks")
+app.add_typer(make_resource_app("inbox items", "inbox-item", "inbox", has_create=False, has_update=False), name="inbox")
 
 
 def version_callback(value: bool):
@@ -82,11 +83,33 @@ def version_callback(value: bool):
 
 
 @app.callback()
-def main(version: bool = typer.Option(False, "--version", "-v", help="Show version and exit.", callback=version_callback, is_eager=True)):
+def main(
+    version: bool = typer.Option(False, "--version", "-v", help="Show version and exit.", callback=version_callback, is_eager=True),
+    retry: bool = typer.Option(False, "--retry", help="Retry transient errors (429, 503) with exponential backoff."),
+):
     """DualEntry accounting CLI."""
+    global _retry_enabled
+    _retry_enabled = retry
     from dualentry_cli.updater import check_for_updates
 
     check_for_updates()
+
+
+@app.command()
+def health():
+    """Check API connectivity and status."""
+    from dualentry_cli.client import APIError
+
+    config = Config()
+    try:
+        client = get_client()
+        data = client.get("/health/")
+        typer.secho(f"API: {config.api_url}", fg=typer.colors.GREEN)
+        typer.secho(f"Status: {data.get('status', 'unknown')}", fg=typer.colors.GREEN)
+        typer.secho(f"Server time: {data.get('timestamp', 'unknown')}", fg=typer.colors.GREEN)
+    except APIError as e:
+        typer.secho(f"API error: {e.detail}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from None
 
 
 @auth_app.command()
@@ -150,6 +173,9 @@ def config_set_url(url: str = typer.Argument(help="Custom API base URL")):
     typer.echo(f"API URL set to {url}")
 
 
+_retry_enabled: bool = False
+
+
 def get_client():
     """Get an authenticated DualEntryClient."""
     from dualentry_cli.client import DualEntryClient
@@ -160,7 +186,7 @@ def get_client():
     if not api_key:
         typer.echo("Not logged in. Run: dualentry auth login")
         raise typer.Exit(code=1)
-    return DualEntryClient(api_url=config.api_url, api_key=api_key)
+    return DualEntryClient(api_url=config.api_url, api_key=api_key, retry=_retry_enabled)
 
 
 def main_entrypoint():

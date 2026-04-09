@@ -11,8 +11,6 @@ from rich.text import Text
 
 console = Console()
 
-_format: str = "human"
-
 # Resource name → display prefix (e.g. "invoice" → "IN")
 _RECORD_PREFIX: dict[str, str] = {
     "invoice": "IN",
@@ -48,18 +46,8 @@ def _fmt_id(record_id, resource: str = "") -> str:
     return str(record_id)
 
 
-def set_format(fmt: str) -> None:
-    global _format
-    _format = fmt
-
-
-def get_format() -> str:
-    return _format
-
-
-def format_output(data: dict, resource: str = "generic", fmt: str | None = None) -> None:
-    effective_fmt = fmt or _format
-    if effective_fmt == "json":
+def format_output(data: dict, resource: str = "generic", fmt: str = "human") -> None:
+    if fmt == "json":
         print(json.dumps(data, indent=2))
         return
 
