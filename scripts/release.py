@@ -169,7 +169,7 @@ def main() -> int:
 
     # Tag
     print("\n  Creating tag...")
-    run(["git", "tag", f"v{new_version}"])
+    run(["git", "tag", "-a", f"v{new_version}", "-m", f"Release v{new_version}"])
 
     # Push
     print("\n  Pushing to GitHub...")
