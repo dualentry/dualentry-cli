@@ -116,6 +116,13 @@ def main() -> int:
 
     print(f"\n  Releasing {current} -> {new_version}\n")
 
+    # Check if tag already exists
+    result = run(["git", "tag", "-l", f"v{new_version}"], check=False)
+    if result.stdout.strip():
+        print(f"  ERROR: Tag v{new_version} already exists.")
+        print("  Either the version files are out of sync, or you need a different bump type.")
+        return 1
+
     # Check for uncommitted changes
     result = run(["git", "status", "--porcelain"])
     if result.stdout.strip():
