@@ -8,7 +8,7 @@ from pathlib import Path
 import typer
 
 from dualentry_cli.cli import HelpfulGroup
-from dualentry_cli.output import format_output
+from dualentry_cli.output import _RECORD_PREFIX, format_output
 
 # ── Shared option defaults ──────────────────────────────────────────
 
@@ -20,6 +20,18 @@ Status = typer.Option(None, "--status", help="Filter by status (draft, posted, a
 StartDate = typer.Option(None, "--start-date", help="Filter from date (YYYY-MM-DD)")
 EndDate = typer.Option(None, "--end-date", help="Filter to date (YYYY-MM-DD)")
 Format = typer.Option("human", "--format", "-o", help="Output format: human or json")
+
+
+_PREFIX_TO_RESOURCE = {v: k for k, v in _RECORD_PREFIX.items()}
+
+
+def _strip_record_prefix(number: str) -> str:
+    """Strip display prefix from a record number (e.g. 'JE-1619031' → '1619031')."""
+    if "-" in number:
+        prefix, _, rest = number.partition("-")
+        if prefix.upper() in _PREFIX_TO_RESOURCE and rest.isdigit():
+            return rest
+    return number
 
 
 def _build_filter_params(
@@ -112,7 +124,7 @@ def make_resource_app(
             from dualentry_cli.main import get_client
 
             client = get_client()
-            data = client.get(f"/{path}/{number}/")
+            data = client.get(f"/{path}/{_strip_record_prefix(number)}/")
             format_output(data, resource=resource, fmt=output)
 
         get_cmd_with_number.__doc__ = f"Get a {resource} by number."
