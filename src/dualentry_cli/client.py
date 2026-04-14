@@ -69,8 +69,17 @@ class DualEntryClient:
             try:
                 detail = response.json()
             except Exception:
-                detail = response.text
-            raise APIError(status, str(detail))
+                raise APIError(status, response.text) from None
+            errors = detail.get("errors", detail) if isinstance(detail, dict) else detail
+            if isinstance(errors, dict):
+                messages = []
+                for field, msgs in errors.items():
+                    if isinstance(msgs, list):
+                        messages.extend(msgs)
+                    else:
+                        messages.append(f"{field}: {msgs}")
+                raise APIError(status, "; ".join(messages) if messages else str(detail))
+            raise APIError(status, str(errors))
         return response.json()
 
     def _request(self, method: str, path: str, **kwargs) -> dict:
