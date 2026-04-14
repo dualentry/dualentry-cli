@@ -61,11 +61,16 @@ def check_for_updates() -> None:
     """Show update notice from last cached check, then refresh cache in background."""
     cache = _read_cache()
 
-    # Show cached result immediately (no blocking)
     cached_latest = cache.get("latest_version")
     if cached_latest and cached_latest != __version__ and _is_newer(cached_latest, __version__):
         typer.secho(
-            f"\nUpdate available: {__version__} → {cached_latest}. Run: uv tool upgrade dualentry-cli",
+            f"\n  ⚠ Update available: {__version__} → {cached_latest}",
+            fg=typer.colors.YELLOW,
+            bold=True,
+            err=True,
+        )
+        typer.secho(
+            "    brew upgrade dualentry  or  uv tool upgrade dualentry-cli\n",
             fg=typer.colors.YELLOW,
             err=True,
         )

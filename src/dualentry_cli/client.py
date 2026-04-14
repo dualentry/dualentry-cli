@@ -101,7 +101,7 @@ class DualEntryClient:
 
             if attempt < _MAX_RETRIES - 1:
                 delay = _RETRY_DELAYS[attempt]
-                print(f"Retrying in {delay}s... (attempt {attempt + 2}/{_MAX_RETRIES})", file=sys.stderr)
+                print(f"\033[33mRetrying in {delay}s... (attempt {attempt + 2}/{_MAX_RETRIES})\033[0m", file=sys.stderr)
                 time.sleep(delay)
 
         # Final attempt

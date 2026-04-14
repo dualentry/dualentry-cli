@@ -198,7 +198,7 @@ def main_entrypoint():
     try:
         app()
     except APIError as e:
-        typer.secho(f"Error: {e.detail}", fg=typer.colors.RED, err=True)
+        typer.secho(f"\n  ✗ Error: {e.detail}\n", fg=typer.colors.RED, bold=True, err=True)
         sys.exit(1)
 
 
