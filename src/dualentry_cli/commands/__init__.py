@@ -25,6 +25,22 @@ Format = typer.Option("human", "--format", "-o", help="Output format: human or j
 _PREFIX_TO_RESOURCE = {v: k for k, v in _RECORD_PREFIX.items()}
 
 
+def _resolve_by_internal_id(client, path: str, value: str) -> dict | None:
+    """Try to find a record by internal_id when lookup by number fails."""
+    if not value.isdigit():
+        return None
+    try:
+        data = client.get(f"/{path}/", params={"search": value, "limit": 5})
+    except Exception:
+        return None
+    for item in data.get("items", []):
+        if str(item.get("internal_id")) == value:
+            number = item.get("number")
+            if number is not None:
+                return client.get(f"/{path}/{number}/")
+    return None
+
+
 def _strip_record_prefix(number: str) -> str:
     """Strip display prefix from a record number (e.g. 'JE-1619031' → '1619031')."""
     if "-" in number:
@@ -117,7 +133,30 @@ def make_resource_app(
     if has_number:
 
         @app.command("get")
-        def get_cmd_with_number(
+        def get_cmd_auto(
+            value: str = typer.Argument(help="Record number (#) or ID (e.g. JE-1619031)"),
+            output: str = Format,
+        ):
+            """Try by number first, fall back to ID lookup on 404."""
+            from dualentry_cli.client import APIError
+            from dualentry_cli.main import get_client
+
+            client = get_client()
+            stripped = _strip_record_prefix(value)
+            try:
+                data = client.get(f"/{path}/{stripped}/")
+            except APIError as e:
+                if e.status_code != 404:
+                    raise
+                data = _resolve_by_internal_id(client, path, stripped)
+                if data is None:
+                    raise
+            format_output(data, resource=resource, fmt=output)
+
+        get_cmd_auto.__doc__ = f"Get a {resource} by number or ID."
+
+        @app.command("get-number")
+        def get_cmd_by_number(
             number: str = typer.Argument(help="Record number (the # column)"),
             output: str = Format,
         ):
@@ -127,7 +166,24 @@ def make_resource_app(
             data = client.get(f"/{path}/{_strip_record_prefix(number)}/")
             format_output(data, resource=resource, fmt=output)
 
-        get_cmd_with_number.__doc__ = f"Get a {resource} by number."
+        get_cmd_by_number.__doc__ = f"Get a {resource} by number."
+
+        @app.command("get-id")
+        def get_cmd_by_id(
+            record_id: str = typer.Argument(help="Record ID (e.g. JE-1619031 or 1619031)"),
+            output: str = Format,
+        ):
+            from dualentry_cli.client import APIError
+            from dualentry_cli.main import get_client
+
+            client = get_client()
+            stripped = _strip_record_prefix(record_id)
+            data = _resolve_by_internal_id(client, path, stripped)
+            if data is None:
+                raise APIError(404, "Resource not found. Check the ID and try again.")
+            format_output(data, resource=resource, fmt=output)
+
+        get_cmd_by_id.__doc__ = f"Get a {resource} by ID."
     else:
 
         @app.command("get")
