@@ -80,7 +80,62 @@ class TestAccountCommands:
         assert "Cash" in result.output
 
 
-class TestJsonFileValidation:
+class TestErrorHandling:
+    """Test that API errors produce clean output without tracebacks."""
+
+    def test_api_error_caught_by_runner(self, mock_get_client):
+        from dualentry_cli.client import APIError
+
+        mock_get_client.get.side_effect = APIError(404, "Resource not found. Check the ID or number and try again.")
+        result = runner.invoke(app, ["journal-entries", "get", "99999"])
+        assert result.exit_code == 1
+
+    def test_main_entrypoint_catches_api_error(self, mock_get_client, monkeypatch, capsys):
+        """The real entrypoint prints the error and exits without traceback."""
+        from dualentry_cli.client import APIError
+        from dualentry_cli.main import main_entrypoint
+
+        monkeypatch.setattr("sys.argv", ["dualentry", "journal-entries", "get", "99999"])
+        mock_get_client.get.side_effect = APIError(400, "JournalEntry number 99999 not found")
+        with pytest.raises(SystemExit) as exc:
+            main_entrypoint()
+        assert exc.value.code == 1
+        captured = capsys.readouterr()
+        assert "JournalEntry number 99999 not found" in captured.err
+        assert "Traceback" not in captured.err
+        assert "click.exceptions" not in captured.err
+
+    def test_main_entrypoint_404_no_traceback(self, mock_get_client, monkeypatch, capsys):
+        from dualentry_cli.client import APIError
+        from dualentry_cli.main import main_entrypoint
+
+        monkeypatch.setattr("sys.argv", ["dualentry", "journal-entries", "get", "99999"])
+        mock_get_client.get.side_effect = APIError(404, "Resource not found.")
+        with pytest.raises(SystemExit) as exc:
+            main_entrypoint()
+        assert exc.value.code == 1
+        captured = capsys.readouterr()
+        assert "Resource not found." in captured.err
+        assert "Traceback" not in captured.err
+
+    def test_main_entrypoint_500_no_traceback(self, mock_get_client, monkeypatch, capsys):
+        from dualentry_cli.client import APIError
+        from dualentry_cli.main import main_entrypoint
+
+        monkeypatch.setattr("sys.argv", ["dualentry", "invoices", "list"])
+        mock_get_client.get.side_effect = APIError(500, "Server error (500).")
+        with pytest.raises(SystemExit) as exc:
+            main_entrypoint()
+        assert exc.value.code == 1
+        captured = capsys.readouterr()
+        assert "Traceback" not in captured.err
+
+    def test_prefix_stripped_on_get(self, mock_get_client):
+        mock_get_client.get.return_value = {"internal_id": 421163, "number": 3}
+        result = runner.invoke(app, ["journal-entries", "get", "JE-3"])
+        assert result.exit_code == 0
+        mock_get_client.get.assert_called_once_with("/journal-entries/3/")
+
     """Test JSON file loading and validation."""
 
     def test_load_json_file_not_found(self, tmp_path):

@@ -32,12 +32,12 @@ jobs:
           rm -f pyproject.toml.bak src/dualentry_cli/__init__.py.bak
       - run: uv sync --dev
       - run: uv run python scripts/build.py
-      - name: Rename binary
-        run: mv dist/dualentry dist/dualentry-${{ matrix.target }}
+      - name: Package as tarball
+        run: tar czf dist/dualentry-${{ matrix.target }}.tar.gz -C dist dualentry/
       - uses: actions/upload-artifact@v4
         with:
           name: dualentry-${{ matrix.target }}
-          path: dist/dualentry-${{ matrix.target }}
+          path: dist/dualentry-${{ matrix.target }}.tar.gz
 
   upload:
     needs: build
@@ -67,9 +67,9 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           BASE_URL="https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}"
 
-          SHA_ARM64=$(curl -sL "$BASE_URL/dualentry-macos-arm64" | shasum -a 256 | cut -d' ' -f1)
-          SHA_X86_64=$(curl -sL "$BASE_URL/dualentry-macos-x86_64" | shasum -a 256 | cut -d' ' -f1)
-          SHA_LINUX=$(curl -sL "$BASE_URL/dualentry-linux-x86_64" | shasum -a 256 | cut -d' ' -f1)
+          SHA_ARM64=$(curl -sL "$BASE_URL/dualentry-macos-arm64.tar.gz" | shasum -a 256 | cut -d' ' -f1)
+          SHA_X86_64=$(curl -sL "$BASE_URL/dualentry-macos-x86_64.tar.gz" | shasum -a 256 | cut -d' ' -f1)
+          SHA_LINUX=$(curl -sL "$BASE_URL/dualentry-linux-x86_64.tar.gz" | shasum -a 256 | cut -d' ' -f1)
 
           cat > /tmp/dualentry.rb <<'FORMULA'
           class Dualentry < Formula
@@ -79,22 +79,22 @@ jobs:
 
             on_macos do
               if Hardware::CPU.arm?
-                url "URL_PLACEHOLDER/dualentry-macos-arm64"
+                url "URL_PLACEHOLDER/dualentry-macos-arm64.tar.gz"
                 sha256 "SHA_ARM64_PLACEHOLDER"
               else
-                url "URL_PLACEHOLDER/dualentry-macos-x86_64"
+                url "URL_PLACEHOLDER/dualentry-macos-x86_64.tar.gz"
                 sha256 "SHA_X86_64_PLACEHOLDER"
               end
             end
 
             on_linux do
-              url "URL_PLACEHOLDER/dualentry-linux-x86_64"
+              url "URL_PLACEHOLDER/dualentry-linux-x86_64.tar.gz"
               sha256 "SHA_LINUX_PLACEHOLDER"
             end
 
             def install
-              binary = Dir["dualentry-*"].first || "dualentry"
-              bin.install binary => "dualentry"
+              libexec.install Dir["dualentry/*"]
+              bin.install_symlink libexec/"dualentry"
             end
 
             test do
