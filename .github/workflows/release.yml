@@ -93,7 +93,8 @@ jobs:
             end
 
             def install
-              libexec.install Dir["dualentry/*"]
+              libexec.install "dualentry"
+              libexec.install "_internal"
               bin.install_symlink libexec/"dualentry"
             end
 
