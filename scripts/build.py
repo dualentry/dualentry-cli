@@ -28,7 +28,7 @@ def main():
                 sys.executable,
                 "-m",
                 "PyInstaller",
-                "--onefile",
+                "--onedir",
                 "--name",
                 "dualentry",
                 "--strip",
@@ -39,7 +39,7 @@ def main():
             check=True,
         )
 
-        print(f"\nBinary built: {ROOT / 'dist' / 'dualentry'}")
+        print(f"\nBinary built: {ROOT / 'dist' / 'dualentry' / 'dualentry'}")
     finally:
         BUILD_INFO.write_text(original)
 
