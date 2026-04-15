@@ -530,9 +530,10 @@ def _journal_entry_detail(r):
         je_table.add_column("Credit", justify="right", width=14)
 
         for i, item in enumerate(items, 1):
+            account = item.get("account_name") or item.get("account_number") or item.get("account_id") or ""
             je_table.add_row(
                 str(i),
-                str(item.get("account_name", item.get("account_id", ""))),
+                str(account),
                 item.get("memo", ""),
                 _money(item.get("debit"), currency) if item.get("debit") else "",
                 _money(item.get("credit"), currency) if item.get("credit") else "",
