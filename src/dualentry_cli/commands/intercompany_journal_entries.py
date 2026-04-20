@@ -6,126 +6,13 @@ from pathlib import Path
 
 import typer
 
-from dualentry_cli.cli import HelpfulGroup
-from dualentry_cli.commands import (
-    AllPages,
-    EndDate,
-    Format,
-    Limit,
-    Offset,
-    Search,
-    StartDate,
-    Status,
-    _do_list,
-    _load_json_file,
-    _resolve_by_internal_id,
-    _strip_record_prefix,
-)
+from dualentry_cli.commands import Format, _load_json_file, _strip_record_prefix, make_resource_app
 from dualentry_cli.output import format_output
 
-app = typer.Typer(help="Manage intercompany journal entries", no_args_is_help=True, cls=HelpfulGroup)
+app = make_resource_app("intercompany journal entries", "intercompany-journal-entry", "intercompany-journal-entries", has_number=True)
 
 _PATH = "intercompany-journal-entries"
 _RESOURCE = "intercompany-journal-entry"
-
-
-@app.command("list")
-def list_cmd(
-    limit: int = Limit,
-    offset: int = Offset,
-    all_pages: bool = AllPages,
-    search: str | None = Search,
-    status: str | None = Status,
-    start_date: str | None = StartDate,
-    end_date: str | None = EndDate,
-    output: str = Format,
-):
-    """List intercompany journal entries."""
-    from dualentry_cli.main import get_client
-
-    client = get_client()
-    _do_list(client, _PATH, _RESOURCE, limit, offset, all_pages, output, search=search, status=status, start_date=start_date, end_date=end_date)
-
-
-@app.command("get")
-def get_cmd(
-    value: str = typer.Argument(help="Record number (#) or ID (e.g. IJE-100)"),
-    output: str = Format,
-):
-    """Get an intercompany journal entry by number or ID."""
-    from dualentry_cli.client import APIError
-    from dualentry_cli.main import get_client
-
-    client = get_client()
-    stripped = _strip_record_prefix(value)
-    try:
-        data = client.get(f"/{_PATH}/{stripped}/")
-    except APIError as e:
-        if e.status_code != 404:
-            raise
-        data = _resolve_by_internal_id(client, _PATH, stripped)
-        if data is None:
-            raise
-    format_output(data, resource=_RESOURCE, fmt=output)
-
-
-@app.command("get-number")
-def get_by_number(
-    number: str = typer.Argument(help="Record number"),
-    output: str = Format,
-):
-    """Get an intercompany journal entry by number."""
-    from dualentry_cli.main import get_client
-
-    client = get_client()
-    data = client.get(f"/{_PATH}/{_strip_record_prefix(number)}/")
-    format_output(data, resource=_RESOURCE, fmt=output)
-
-
-@app.command("get-id")
-def get_by_id(
-    record_id: str = typer.Argument(help="Record ID (e.g. IJE-100 or 100)"),
-    output: str = Format,
-):
-    """Get an intercompany journal entry by ID."""
-    from dualentry_cli.client import APIError
-    from dualentry_cli.main import get_client
-
-    client = get_client()
-    stripped = _strip_record_prefix(record_id)
-    data = _resolve_by_internal_id(client, _PATH, stripped)
-    if data is None:
-        raise APIError(404, "Resource not found. Check the ID and try again.")
-    format_output(data, resource=_RESOURCE, fmt=output)
-
-
-@app.command("create")
-def create_cmd(
-    file: Path = typer.Option(..., "--file", "-f", help="JSON file with record data"),
-    output: str = Format,
-):
-    """Create an intercompany journal entry from a JSON file."""
-    from dualentry_cli.main import get_client
-
-    payload = _load_json_file(file)
-    client = get_client()
-    data = client.post(f"/{_PATH}/", json=payload)
-    format_output(data, resource=_RESOURCE, fmt=output)
-
-
-@app.command("update")
-def update_cmd(
-    number: str = typer.Argument(help="Record number"),
-    file: Path = typer.Option(..., "--file", "-f", help="JSON file with update data"),
-    output: str = Format,
-):
-    """Update an intercompany journal entry."""
-    from dualentry_cli.main import get_client
-
-    payload = _load_json_file(file)
-    client = get_client()
-    data = client.put(f"/{_PATH}/{_strip_record_prefix(number)}/", json=payload)
-    format_output(data, resource=_RESOURCE, fmt=output)
 
 
 @app.command("validate")
