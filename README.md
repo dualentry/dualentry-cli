@@ -1,4 +1,4 @@
-G<p align="center">
+<p align="center">
   <img src="assets/icon.svg" alt="DualEntry" width="80">
 </p>
 
