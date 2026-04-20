@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 
 import typer
@@ -97,6 +98,19 @@ def _load_json_file(file: Path) -> dict:
         raise typer.Exit(code=1) from None
 
 
+# ── Post command helpers ───────────────────────────────────────────
+
+_WRITABLE_FIELDS = {"date", "transaction_date", "memo", "currency_iso_4217_code", "exchange_rate", "record_status", "items", "attachments"}
+_WRITABLE_ITEM_FIELDS = {"id", "company_id", "account_number", "debit", "credit", "memo", "position", "classifications", "customer_id", "vendor_id", "currency", "eliminate"}
+
+
+def _strip_to_writable(data: dict) -> dict:
+    payload = {k: v for k, v in data.items() if k in _WRITABLE_FIELDS}
+    if "items" in payload:
+        payload["items"] = [{k: v for k, v in item.items() if k in _WRITABLE_ITEM_FIELDS} for item in payload["items"]]
+    return payload
+
+
 # ── Factory ─────────────────────────────────────────────────────────
 
 
@@ -108,6 +122,9 @@ def make_resource_app(
     has_update: bool = True,
     has_delete: bool = False,
     has_number: bool = False,
+    has_post: bool = False,
+    template: dict | None = None,
+    validate_fn: Callable[[Path], None] | None = None,
 ) -> typer.Typer:
     """Create a Typer app for a standard CRUD resource."""
     app = typer.Typer(help=f"Manage {name}", no_args_is_help=True, cls=HelpfulGroup)
@@ -245,5 +262,55 @@ def make_resource_app(
             typer.echo(f"{resource.replace('-', ' ').title()} {record_id} deleted.")
 
         delete_cmd.__doc__ = f"Delete a {resource}."
+
+    if validate_fn is not None:
+
+        @app.command("validate")
+        def validate_cmd(
+            file: Path = typer.Option(..., "--file", "-f", help="JSON file to validate"),
+        ):
+            validate_fn(file)
+
+        validate_cmd.__doc__ = f"Validate a {resource} payload (client-side)."
+
+    if has_post:
+
+        @app.command("post")
+        def post_cmd(
+            number: str = typer.Argument(help="Record number of the draft to post"),
+            output: str = Format,
+        ):
+            from dualentry_cli.main import get_client
+
+            client = get_client()
+            stripped = _strip_record_prefix(number)
+            data = client.get(f"/{path}/{stripped}/")
+
+            current_status = data.get("record_status", "")
+            if current_status != "draft":
+                typer.secho(f"  \u2717 Cannot post: record is '{current_status}', only draft records can be posted.", fg=typer.colors.RED, err=True)
+                raise typer.Exit(code=1)
+
+            payload = _strip_to_writable(data)
+            payload["record_status"] = "posted"
+            result = client.put(f"/{path}/{stripped}/", json=payload)
+            format_output(result, resource=resource, fmt=output)
+
+        post_cmd.__doc__ = f"Post a draft {resource}."
+
+    if template is not None:
+
+        @app.command("template")
+        def template_cmd(
+            output_file: Path | None = typer.Option(None, "--output", "-o", help="Write template to file instead of stdout"),
+        ):
+            content = json.dumps(template, indent=2)
+            if output_file:
+                output_file.write_text(content + "\n")
+                typer.secho(f"Template written to {output_file}", fg=typer.colors.GREEN)
+            else:
+                typer.echo(content)
+
+        template_cmd.__doc__ = f"Output a sample {resource} JSON template."
 
     return app

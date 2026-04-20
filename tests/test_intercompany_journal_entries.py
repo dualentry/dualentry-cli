@@ -244,10 +244,13 @@ class TestIJEPost:
             "currency_iso_4217_code": "USD",
             "exchange_rate": "1.00000000",
             "record_status": "draft",
-            "companies": [{"id": 1, "name": "Co A"}, {"id": 2, "name": "Co B"}],
+            "companies": [{"id": 1, "name": "Co A"}, {"id": 2, "name": "Co B"}, {"id": 3, "name": "Elim Co"}],
+            "company_ids": [1, 2, 3],
             "items": [
                 {"id": 1, "company_id": 1, "company_name": "Co A", "account_number": 1000, "debit": "1000.00", "credit": "0.00", "memo": "", "position": 0, "eliminate": True},
                 {"id": 2, "company_id": 2, "company_name": "Co B", "account_number": 2000, "debit": "0.00", "credit": "1000.00", "memo": "", "position": 1, "eliminate": True},
+                {"id": 3, "company_id": 3, "company_name": "Elim Co", "account_number": 1000, "debit": "0.00", "credit": "1000.00", "memo": "", "position": 2, "eliminate": True},
+                {"id": 4, "company_id": 3, "company_name": "Elim Co", "account_number": 2000, "debit": "1000.00", "credit": "0.00", "memo": "", "position": 3, "eliminate": True},
             ],
         }
         posted_response = {**draft_response, "record_status": "posted"}
@@ -258,7 +261,13 @@ class TestIJEPost:
         assert "POSTED" in result.output
         put_call = mock_get_client.put.call_args
         assert put_call[0][0] == "/intercompany-journal-entries/42/"
-        assert put_call[1]["json"]["record_status"] == "posted"
+        put_payload = put_call[1]["json"]
+        assert put_payload["record_status"] == "posted"
+        assert "companies" not in put_payload
+        assert "company_ids" not in put_payload
+        assert "record_number" not in put_payload
+        assert "internal_id" not in put_payload
+        assert "company_name" not in put_payload["items"][0]
 
     def test_post_already_posted_fails(self, mock_get_client):
         mock_get_client.get.return_value = {
@@ -297,8 +306,9 @@ class TestIJETemplate:
         parsed = json.loads(result.output)
         assert "date" in parsed
         assert "items" in parsed
-        assert len(parsed["items"]) == 2
-        assert parsed["items"][0]["company_id"] != parsed["items"][1]["company_id"]
+        assert len(parsed["items"]) == 4
+        company_ids = {item["company_id"] for item in parsed["items"]}
+        assert len(company_ids) >= 2
         assert parsed["record_status"] == "draft"
 
     def test_template_to_file(self, tmp_path):
@@ -308,9 +318,9 @@ class TestIJETemplate:
         assert out_file.exists()
         parsed = json.loads(out_file.read_text())
         assert "items" in parsed
-        assert len(parsed["items"]) == 2
+        assert len(parsed["items"]) == 4
 
-    def test_template_is_valid_json(self):
+    def test_template_is_balanced(self):
         result = runner.invoke(app, ["intercompany-journal-entries", "template"])
         parsed = json.loads(result.output)
         total_debits = sum(float(item["debit"]) for item in parsed["items"])
