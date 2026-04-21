@@ -31,6 +31,7 @@ _RECORD_PREFIX: dict[str, str] = {
     "vendor-prepayment-application": "VPA",
     "vendor-refund": "VR",
     "journal-entry": "JE",
+    "intercompany-journal-entry": "IJE",
     "bank-transfer": "BT",
     "fixed-asset": "FA",
 }
@@ -543,6 +544,102 @@ def _journal_entry_detail(r):
 
 
 _register("journal-entry", _journal_entry_list, _journal_entry_detail)
+
+
+# ── Intercompany Journal Entry ──────────────────────────────────────
+
+
+def _ije_list(items):
+    table = Table(title="Intercompany Journal Entries", show_lines=False)
+    table.add_column("ID", style="dim", justify="right")
+    table.add_column("#", style="bold", justify="right")
+    table.add_column("Date", justify="center")
+    table.add_column("Companies", min_width=20)
+    table.add_column("Memo", max_width=20)
+    table.add_column("Currency", justify="center")
+    table.add_column("Amount", justify="right", style="bold")
+    table.add_column("Status")
+
+    for r in items:
+        currency = r.get("currency_iso_4217_code", "")
+        companies = r.get("companies", [])
+        company_names = ", ".join(c.get("name", "") for c in companies) if companies else r.get("company_name", "-")
+        memo = r.get("memo", "") or ""
+        amount = sum(float(item.get("debit") or 0) for item in r.get("items", []))
+        table.add_row(
+            _fmt_id(r.get("internal_id"), "intercompany-journal-entry"),
+            str(r.get("record_number", "")),
+            r.get("date", "-"),
+            company_names,
+            memo[:20] + ("..." if len(memo) > 20 else ""),
+            currency,
+            _money(amount or r.get("amount"), currency),
+            _status_badge(r.get("record_status", "")),
+        )
+
+    console.print(table)
+
+
+def _ije_detail(r):
+    currency = r.get("currency_iso_4217_code", "")
+
+    header = Text()
+    header.append("INTERCOMPANY JOURNAL ENTRY", style="bold")
+    header.append(f"  {_fmt_id(r.get('internal_id'), 'intercompany-journal-entry')}", style="bold cyan")
+    status = r.get("record_status", "")
+    if status:
+        header.append(f"  {status.upper()}", style=_status_color(status))
+    console.print(Panel(header, expand=False))
+
+    details = Table.grid(padding=(0, 2))
+    details.add_column(style="dim", min_width=20)
+    details.add_column()
+    details.add_row("Number:", str(r.get("record_number", "-")))
+    details.add_row("Date:", r.get("date", "-"))
+    tx_date = r.get("transaction_date")
+    if tx_date and tx_date != r.get("date"):
+        details.add_row("Transaction Date:", tx_date)
+    companies = r.get("companies", [])
+    if companies:
+        details.add_row("Companies:", ", ".join(c.get("name", "") for c in companies))
+    details.add_row("Currency:", currency or "-")
+    exchange_rate = r.get("exchange_rate", "")
+    if exchange_rate and exchange_rate not in ("1", "1.00", "1.00000000"):
+        details.add_row("Exchange Rate:", exchange_rate)
+    if r.get("memo"):
+        details.add_row("Memo:", r["memo"])
+    console.print(details)
+    console.print()
+
+    items = r.get("items", [])
+    if items:
+        items_sorted = sorted(items, key=lambda x: x.get("position", 0))
+        je_table = Table(show_lines=True, title="Entries")
+        je_table.add_column("#", justify="right", style="dim", width=4)
+        je_table.add_column("Company", min_width=14)
+        je_table.add_column("Account", min_width=20)
+        je_table.add_column("Memo", min_width=16)
+        je_table.add_column("Debit", justify="right", width=14)
+        je_table.add_column("Credit", justify="right", width=14)
+        je_table.add_column("Elim", justify="center", width=5)
+
+        for i, item in enumerate(items_sorted, 1):
+            account = item.get("account_name") or str(item.get("account_number", ""))
+            elim = "\u2713" if item.get("eliminate") else ""
+            je_table.add_row(
+                str(i),
+                item.get("company_name", "-"),
+                account,
+                item.get("memo", ""),
+                _money(item.get("debit"), currency) if item.get("debit") else "",
+                _money(item.get("credit"), currency) if item.get("credit") else "",
+                elim,
+            )
+
+        console.print(je_table)
+
+
+_register("intercompany-journal-entry", _ije_list, _ije_detail)
 
 
 # ── Bank Transfer ────────────────────────────────────────────────────

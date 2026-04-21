@@ -8,6 +8,7 @@ from dualentry_cli.auth import clear_credentials, load_api_key, run_login_flow, 
 from dualentry_cli.cli import HelpfulGroup
 from dualentry_cli.commands import make_resource_app
 from dualentry_cli.commands.accounts import app as accounts_app
+from dualentry_cli.commands.ije_extras import IJE_TEMPLATE, validate_ije
 from dualentry_cli.config import Config
 
 app = typer.Typer(name="dualentry", help="DualEntry accounting CLI", no_args_is_help=True, cls=HelpfulGroup)
@@ -69,7 +70,18 @@ app.add_typer(recurring_app, name="recurring")
 app.add_typer(make_resource_app("contracts", "contract", "contracts"), name="contracts")
 app.add_typer(make_resource_app("budgets", "budget", "budgets"), name="budgets")
 app.add_typer(make_resource_app("workflows", "workflow", "workflows", has_create=False, has_update=False), name="workflows")
-app.add_typer(make_resource_app("intercompany journal entries", "intercompany-journal-entry", "intercompany-journal-entries", has_number=True), name="intercompany-journal-entries")
+app.add_typer(
+    make_resource_app(
+        "intercompany journal entries",
+        "intercompany-journal-entry",
+        "intercompany-journal-entries",
+        has_number=True,
+        has_post=True,
+        template=IJE_TEMPLATE,
+        validate_fn=validate_ije,
+    ),
+    name="intercompany-journal-entries",
+)
 app.add_typer(make_resource_app("paper checks", "paper-check", "paper-checks", has_number=True), name="paper-checks")
 app.add_typer(make_resource_app("inbox items", "inbox-item", "inbox", has_create=False, has_update=False), name="inbox")
 
