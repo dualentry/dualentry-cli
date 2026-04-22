@@ -56,6 +56,7 @@ def _build_filter_params(
     status: str | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
+    **extra,
 ) -> dict:
     """Build filter query params, omitting None values."""
     params: dict = {}
@@ -67,6 +68,7 @@ def _build_filter_params(
         params["start_date"] = start_date
     if end_date:
         params["end_date"] = end_date
+    params.update({key: value for key, value in extra.items() if value is not None})
     return params
 
 
@@ -123,11 +125,16 @@ def make_resource_app(
     has_delete: bool = False,
     has_number: bool = False,
     has_post: bool = False,
+    filters: set[str] | None = None,
     template: dict | None = None,
-    validate_fn: Callable[[Path], None] | None = None,
+    checks: list[Callable] | None = None,
+    online_checks: list[Callable] | None = None,
 ) -> typer.Typer:
     """Create a Typer app for a standard CRUD resource."""
+    import inspect
+
     app = typer.Typer(help=f"Manage {name}", no_args_is_help=True, cls=HelpfulGroup)
+    enabled_filters = filters or set()
 
     @app.command("list")
     def list_cmd(
@@ -138,14 +145,38 @@ def make_resource_app(
         status: str | None = Status,
         start_date: str | None = StartDate,
         end_date: str | None = EndDate,
+        company: str | None = typer.Option(None, "--company", "-c", help="Filter by company ID"),
+        customer: str | None = typer.Option(None, "--customer", help="Filter by customer ID"),
+        vendor: str | None = typer.Option(None, "--vendor", help="Filter by vendor ID"),
         output: str = Format,
     ):
         from dualentry_cli.main import get_client
 
         client = get_client()
-        _do_list(client, path, resource, limit, offset, all_pages, output, search=search, status=status, start_date=start_date, end_date=end_date)
+        _do_list(
+            client,
+            path,
+            resource,
+            limit,
+            offset,
+            all_pages,
+            output,
+            search=search,
+            status=status,
+            start_date=start_date,
+            end_date=end_date,
+            company_id=company if isinstance(company, str) else None,
+            customer_id=customer if isinstance(customer, str) else None,
+            vendor_id=vendor if isinstance(vendor, str) else None,
+        )
 
     list_cmd.__doc__ = f"List {name}."
+
+    all_filters = {"company", "customer", "vendor"}
+    remove = all_filters - enabled_filters
+    if remove:
+        sig = inspect.signature(list_cmd)
+        list_cmd.__signature__ = sig.replace(parameters=[p for p in sig.parameters.values() if p.name not in remove])
 
     if has_number:
 
@@ -263,15 +294,34 @@ def make_resource_app(
 
         delete_cmd.__doc__ = f"Delete a {resource}."
 
-    if validate_fn is not None:
+    if checks:
 
         @app.command("validate")
         def validate_cmd(
             file: Path = typer.Option(..., "--file", "-f", help="JSON file to validate"),
+            online: bool = typer.Option(False, "--online", help="Also run checks that require API access"),
         ):
-            validate_fn(file)
+            payload = _load_json_file(file)
+            errors: list[str] = []
+            client = None
+            if online:
+                from dualentry_cli.main import get_client
 
-        validate_cmd.__doc__ = f"Validate a {resource} payload (client-side)."
+                client = get_client()
+            all_checks = list(checks)
+            if online and online_checks:
+                all_checks.extend(online_checks)
+            for check in all_checks:
+                if errors:
+                    break
+                errors.extend(check(payload, client=client))
+            if errors:
+                for err in errors:
+                    typer.secho(f"  \u2717 {err}", fg=typer.colors.RED, err=True)
+                raise typer.Exit(code=1)
+            typer.secho("  \u2713 Valid", fg=typer.colors.GREEN)
+
+        validate_cmd.__doc__ = f"Validate a {resource} payload."
 
     if has_post:
 
