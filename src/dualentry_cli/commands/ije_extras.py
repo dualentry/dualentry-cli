@@ -2,11 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import typer
-
-from dualentry_cli.commands import _load_json_file
+from decimal import Decimal, InvalidOperation
 
 IJE_TEMPLATE = {
     "date": "2026-01-01",
@@ -55,47 +51,66 @@ IJE_TEMPLATE = {
 }
 
 
-def validate_ije(file: Path) -> None:
-    from decimal import Decimal, InvalidOperation
+# ── Checks ─────────────────────────────────────────────────────────
+# Each check: (payload, client=None) -> list[str]
+# Return error strings. Empty list = pass.
 
-    payload = _load_json_file(file)
-    errors: list[str] = []
 
+def check_items_present(payload: dict, client=None) -> list[str]:
     items = payload.get("items")
     if not items or not isinstance(items, list):
-        errors.append("Payload must contain a non-empty 'items' array.")
-    else:
-        company_ids = set()
-        total_debits = Decimal(0)
-        total_credits = Decimal(0)
+        return ["Payload must contain a non-empty 'items' array."]
+    return []
 
-        for i, item in enumerate(items):
-            cid = item.get("company_id")
-            if cid is not None:
-                company_ids.add(cid)
 
-            try:
-                debit = Decimal(str(item.get("debit", "0")))
-                credit = Decimal(str(item.get("credit", "0")))
-            except (InvalidOperation, TypeError):
-                errors.append(f"Item {i}: invalid debit/credit value.")
-                continue
+def check_amounts_valid(payload: dict, client=None) -> list[str]:
+    errors = []
+    for i, item in enumerate(payload.get("items", [])):
+        try:
+            Decimal(str(item.get("debit", "0")))
+            Decimal(str(item.get("credit", "0")))
+        except (InvalidOperation, TypeError):
+            errors.append(f"Item {i}: invalid debit/credit value.")
+    return errors
 
-            total_debits += debit
-            total_credits += credit
 
-        if not errors:
-            if len(company_ids) < 2:
-                errors.append("Intercompany journal entries require lines across at least two distinct companies.")
+def check_debits_equal_credits(payload: dict, client=None) -> list[str]:
+    total_debits = Decimal(0)
+    total_credits = Decimal(0)
+    for item in payload.get("items", []):
+        total_debits += Decimal(str(item.get("debit", "0")))
+        total_credits += Decimal(str(item.get("credit", "0")))
+    total_debits = total_debits.quantize(Decimal("0.01"))
+    total_credits = total_credits.quantize(Decimal("0.01"))
+    if total_debits != total_credits:
+        return [f"Total debits ({total_debits}) must equal total credits ({total_credits})."]
+    return []
 
-            total_debits = total_debits.quantize(Decimal("0.01"))
-            total_credits = total_credits.quantize(Decimal("0.01"))
-            if total_debits != total_credits:
-                errors.append(f"Total debits ({total_debits}) must equal total credits ({total_credits}).")
 
-    if errors:
-        for err in errors:
-            typer.secho(f"  \u2717 {err}", fg=typer.colors.RED, err=True)
-        raise typer.Exit(code=1)
+def check_multi_company(payload: dict, client=None) -> list[str]:
+    company_ids = {item.get("company_id") for item in payload.get("items", []) if item.get("company_id") is not None}
+    if len(company_ids) < 2:
+        return ["Intercompany journal entries require lines across at least two distinct companies."]
+    return []
 
-    typer.secho("  \u2713 Valid", fg=typer.colors.GREEN)
+
+def check_company_access(payload: dict, client=None) -> list[str]:
+    if client is None:
+        return []
+    company_ids = {item.get("company_id") for item in payload.get("items", []) if item.get("company_id") is not None}
+    if not company_ids:
+        return []
+    data = client.get("/companies/", params={"limit": 100})
+    accessible = {c["id"] for c in data.get("items", [])}
+    unknown = company_ids - accessible
+    if unknown:
+        return [f"Company IDs not accessible: {', '.join(str(c) for c in sorted(unknown))}"]
+    return []
+
+
+# ── Offline checks run in order; later checks assume earlier ones passed.
+IJE_OFFLINE_CHECKS = [check_items_present, check_amounts_valid, check_debits_equal_credits, check_multi_company]
+IJE_ONLINE_CHECKS = [check_company_access]
+
+IJE_CHECKS = IJE_OFFLINE_CHECKS
+IJE_ONLINE_EXTRA_CHECKS = IJE_ONLINE_CHECKS
