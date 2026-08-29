@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+- Added `patch` for the twelve resources whose API exposes PATCH, so a partial
+  JSON file changes only the fields it contains
+- `update` now warns which populated fields its PUT would clear, and confirms
+  when run from a terminal
+- `update` warns when omitting `record_status` would post a draft record
+- `post` field lists are declared per resource instead of being shared, so the
+  intercompany-journal-entry shape can no longer be applied to another resource
+
 ## [0.1.17] - 2026-04-15
 
 

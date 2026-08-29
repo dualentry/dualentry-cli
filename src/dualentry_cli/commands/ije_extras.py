@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
 
+from dualentry_cli.commands import PostWritableFields
+
 IJE_TEMPLATE = {
     "date": "2026-01-01",
     "memo": "Intercompany transfer",
@@ -114,3 +116,10 @@ IJE_ONLINE_CHECKS = [check_company_access]
 
 IJE_CHECKS = IJE_OFFLINE_CHECKS
 IJE_ONLINE_EXTRA_CHECKS = IJE_ONLINE_CHECKS
+
+# Fields the IJE write schema accepts; the read response also carries derived ones it rejects.
+IJE_POST_WRITABLE = PostWritableFields(
+    record=frozenset({"date", "transaction_date", "memo", "currency_iso_4217_code", "exchange_rate", "record_status", "items", "attachments"}),
+    line=frozenset({"id", "company_id", "account_number", "debit", "credit", "memo", "position", "classifications", "customer_id", "vendor_id", "currency", "eliminate"}),
+    line_key="items",
+)

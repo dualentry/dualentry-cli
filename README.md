@@ -84,6 +84,22 @@ dualentry bills list --status posted --format json
 
 All resources support `list`, `get`, `create`, and `update` operations.
 
+### Changing part of a record
+
+`update` sends PUT, which replaces the record: any field missing from your JSON
+file is cleared. To change a few fields and leave the rest alone, use `patch`.
+
+```bash
+# Only memo and reference_number change; every other field is untouched.
+echo '{"memo": "Q2 true-up", "reference_number": "REF-10"}' > change.json
+dualentry invoices patch 1001 --file change.json
+```
+
+`patch` is available on the resources whose API exposes it: invoices, bills,
+customer payments, customer credits, customer prepayments, customer prepayment
+applications, customers, vendors, items, classifications, fixed assets and
+contracts. Elsewhere `update` warns before it clears anything.
+
 ## Output Formats
 
 ```bash

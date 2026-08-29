@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import sys
 from collections.abc import Callable
 from pathlib import Path
+from typing import NamedTuple
 
 import typer
 
 from dualentry_cli.cli import HelpfulGroup
+from dualentry_cli.client import APIError
 from dualentry_cli.output import _RECORD_PREFIX, format_output
 
 # ── Shared option defaults ──────────────────────────────────────────
@@ -102,15 +105,91 @@ def _load_json_file(file: Path) -> dict:
 
 # ── Post command helpers ───────────────────────────────────────────
 
-_WRITABLE_FIELDS = {"date", "transaction_date", "memo", "currency_iso_4217_code", "exchange_rate", "record_status", "items", "attachments"}
-_WRITABLE_ITEM_FIELDS = {"id", "company_id", "account_number", "debit", "credit", "memo", "position", "classifications", "customer_id", "vendor_id", "currency", "eliminate"}
+
+class PostWritableFields(NamedTuple):
+    """Fields a resource's `post` may send back. Shapes differ per resource, so each declares its own."""
+
+    record: frozenset[str]
+    line: frozenset[str] = frozenset()
+    line_key: str = "items"
 
 
-def _strip_to_writable(data: dict) -> dict:
-    payload = {k: v for k, v in data.items() if k in _WRITABLE_FIELDS}
-    if "items" in payload:
-        payload["items"] = [{k: v for k, v in item.items() if k in _WRITABLE_ITEM_FIELDS} for item in payload["items"]]
+def _strip_to_writable(data: dict, writable: PostWritableFields) -> dict:
+    payload = {k: v for k, v in data.items() if k in writable.record}
+    lines = payload.get(writable.line_key)
+    if isinstance(lines, list):
+        payload[writable.line_key] = [{k: v for k, v in line.items() if k in writable.line} for line in lines]
     return payload
+
+
+# ── Update command helpers ─────────────────────────────────────────
+
+# Assigned or derived by the API: absent from an update file by design, so warning about them would cry wolf.
+_SERVER_MANAGED_FIELDS = frozenset(
+    {
+        "id",
+        "internal_id",
+        "number",
+        "record_type",
+        "organization_id",
+        "created_at",
+        "updated_at",
+        "created_by",
+        "updated_by",
+        "total",
+        "subtotal",
+        "balance",
+        "amount_due",
+        "amount_paid",
+        "tax_total",
+        "discount_amount",
+        "net_amount",
+    }
+)
+
+
+def _is_interactive() -> bool:
+    """True when there is a terminal attached to answer a prompt."""
+    try:
+        return sys.stdin.isatty()
+    except (AttributeError, ValueError):
+        return False
+
+
+def _holds_data(value) -> bool:
+    """True when a field currently carries something a PUT would destroy."""
+    if value is None:
+        return False
+    if isinstance(value, (str, list, dict, tuple)):
+        return len(value) > 0
+    return True
+
+
+def _fields_cleared_by_put(current: dict, payload: dict) -> list[str]:
+    """Populated fields on the record that the update file omits."""
+    return sorted(key for key, value in current.items() if key not in payload and key not in _SERVER_MANAGED_FIELDS and _holds_data(value))
+
+
+def _warn_before_put(current: dict, payload: dict, *, resource: str, patch_available: bool) -> None:
+    """Warn that PUT replaces the record; confirm only when a terminal can answer."""
+    cleared = _fields_cleared_by_put(current, payload)
+    posts_draft = current.get("record_status") == "draft" and "record_status" not in payload
+    if not cleared and not posts_draft:
+        return
+
+    typer.secho(f"  ! 'update' sends PUT, which replaces the whole {resource}.", fg=typer.colors.YELLOW, err=True)
+    if cleared:
+        typer.secho("    Your file omits these populated fields, so they will be cleared:", fg=typer.colors.YELLOW, err=True)
+        typer.secho(f"      {', '.join(cleared)}", fg=typer.colors.YELLOW, err=True)
+    if posts_draft:
+        typer.secho("    record_status is 'draft' and your file omits it, so this will post the record.", fg=typer.colors.YELLOW, err=True)
+    if patch_available:
+        typer.secho("    Use 'patch' instead to change only the fields in your file.", fg=typer.colors.YELLOW, err=True)
+
+    if not _is_interactive():
+        return
+    if not typer.confirm("    Continue?", default=False):
+        raise typer.Abort
 
 
 # ── Factory ─────────────────────────────────────────────────────────
@@ -123,9 +202,10 @@ def make_resource_app(
     *,
     has_create: bool = True,
     has_update: bool = True,
+    has_patch: bool = False,
     has_delete: bool = False,
     has_number: bool = False,
-    has_post: bool = False,
+    post_writable: PostWritableFields | None = None,
     filters: set[str] | None = None,
     template: dict | None = None,
     checks: list[Callable] | None = None,
@@ -188,7 +268,6 @@ def make_resource_app(
             output: str = Format,
         ):
             """Try by number first, fall back to ID lookup on 404."""
-            from dualentry_cli.client import APIError
             from dualentry_cli.main import get_client
 
             client = get_client()
@@ -223,7 +302,6 @@ def make_resource_app(
             record_id: str = typer.Argument(help="Record ID (e.g. JE-1619031 or 1619031)"),
             output: str = Format,
         ):
-            from dualentry_cli.client import APIError
             from dualentry_cli.main import get_client
 
             client = get_client()
@@ -271,16 +349,43 @@ def make_resource_app(
         def update_cmd(
             record_id: str = typer.Argument(help="Record ID"),
             file: Path = typer.Option(..., "--file", "-f", help="JSON file with update data"),
+            yes: bool = typer.Option(False, "--yes", "-y", help="Skip the warning and its confirmation, and the read it needs"),
             output: str = Format,
         ):
             from dualentry_cli.main import get_client
 
             payload = _load_json_file(file)
             client = get_client()
+            # The warning costs a read, so --yes skips it outright for batch runs.
+            current = None
+            if not yes:
+                try:
+                    current = client.get(f"/{path}/{record_id}/")
+                except Exception:
+                    current = None  # Advisory only; the PUT reports the real problem.
+            if current:
+                _warn_before_put(current, payload, resource=resource, patch_available=has_patch)
             data = client.put(f"/{path}/{record_id}/", json=payload)
             format_output(data, resource=resource, fmt=output)
 
-        update_cmd.__doc__ = f"Update a {resource}."
+        update_cmd.__doc__ = f"Replace a {resource} (PUT). Fields missing from the file are cleared."
+
+    if has_patch:
+
+        @app.command("patch")
+        def patch_cmd(
+            record_id: str = typer.Argument(help="Record ID"),
+            file: Path = typer.Option(..., "--file", "-f", help="JSON file with only the fields to change"),
+            output: str = Format,
+        ):
+            from dualentry_cli.main import get_client
+
+            payload = _load_json_file(file)
+            client = get_client()
+            data = client.patch(f"/{path}/{record_id}/", json=payload)
+            format_output(data, resource=resource, fmt=output)
+
+        patch_cmd.__doc__ = f"Update only the supplied fields of a {resource}. Anything not in the file is left alone."
 
     if has_delete:
 
@@ -325,7 +430,7 @@ def make_resource_app(
 
         validate_cmd.__doc__ = f"Validate a {resource} payload."
 
-    if has_post:
+    if post_writable is not None:
 
         @app.command("post")
         def post_cmd(
@@ -343,7 +448,7 @@ def make_resource_app(
                 typer.secho(f"  \u2717 Cannot post: record is '{current_status}', only draft records can be posted.", fg=typer.colors.RED, err=True)
                 raise typer.Exit(code=1)
 
-            payload = _strip_to_writable(data)
+            payload = _strip_to_writable(data, post_writable)
             payload["record_status"] = "posted"
             result = client.put(f"/{path}/{stripped}/", json=payload)
             format_output(result, resource=resource, fmt=output)

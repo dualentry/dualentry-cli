@@ -8,7 +8,7 @@ from dualentry_cli.auth import clear_credentials, load_api_key, run_login_flow, 
 from dualentry_cli.cli import HelpfulGroup
 from dualentry_cli.commands import make_resource_app
 from dualentry_cli.commands.accounts import app as accounts_app
-from dualentry_cli.commands.ije_extras import IJE_CHECKS, IJE_ONLINE_EXTRA_CHECKS, IJE_TEMPLATE
+from dualentry_cli.commands.ije_extras import IJE_CHECKS, IJE_ONLINE_EXTRA_CHECKS, IJE_POST_WRITABLE, IJE_TEMPLATE
 from dualentry_cli.config import Config
 
 app = typer.Typer(name="dualentry", help="DualEntry accounting CLI", no_args_is_help=True, cls=HelpfulGroup)
@@ -18,19 +18,26 @@ app.add_typer(auth_app, name="auth")
 app.add_typer(config_app, name="config")
 
 # Custom-formatted resources (use factory - output.py handles formatting via resource name)
-app.add_typer(make_resource_app("invoices", "invoice", "invoices", has_number=True, filters={"customer", "company"}), name="invoices")
-app.add_typer(make_resource_app("bills", "bill", "bills", has_number=True, filters={"vendor", "company"}), name="bills")
+app.add_typer(make_resource_app("invoices", "invoice", "invoices", has_patch=True, has_number=True, filters={"customer", "company"}), name="invoices")
+app.add_typer(make_resource_app("bills", "bill", "bills", has_patch=True, has_number=True, filters={"vendor", "company"}), name="bills")
 app.add_typer(accounts_app, name="accounts")  # Accounts has custom filtering (no status/date filters)
 
 # Money-in
 app.add_typer(make_resource_app("sales orders", "sales-order", "sales-orders", has_number=True, filters={"customer", "company"}), name="sales-orders")
-app.add_typer(make_resource_app("customer payments", "customer-payment", "customer-payments", has_number=True, filters={"customer", "company"}), name="customer-payments")
-app.add_typer(make_resource_app("customer credits", "customer-credit", "customer-credits", has_number=True, filters={"customer", "company"}), name="customer-credits")
 app.add_typer(
-    make_resource_app("customer prepayments", "customer-prepayment", "customer-prepayments", has_number=True, filters={"customer", "company"}), name="customer-prepayments"
+    make_resource_app("customer payments", "customer-payment", "customer-payments", has_patch=True, has_number=True, filters={"customer", "company"}), name="customer-payments"
 )
 app.add_typer(
-    make_resource_app("customer prepayment applications", "customer-prepayment-application", "customer-prepayment-applications", has_number=True, filters={"customer", "company"}),
+    make_resource_app("customer credits", "customer-credit", "customer-credits", has_patch=True, has_number=True, filters={"customer", "company"}), name="customer-credits"
+)
+app.add_typer(
+    make_resource_app("customer prepayments", "customer-prepayment", "customer-prepayments", has_patch=True, has_number=True, filters={"customer", "company"}),
+    name="customer-prepayments",
+)
+app.add_typer(
+    make_resource_app(
+        "customer prepayment applications", "customer-prepayment-application", "customer-prepayment-applications", has_patch=True, has_number=True, filters={"customer", "company"}
+    ),
     name="customer-prepayment-applications",
 )
 app.add_typer(make_resource_app("customer deposits", "customer-deposit", "customer-deposits", has_number=True, filters={"customer", "company"}), name="customer-deposits")
@@ -52,15 +59,15 @@ app.add_typer(make_resource_app("direct expenses", "direct-expense", "direct-exp
 # Accounting
 app.add_typer(make_resource_app("journal entries", "journal-entry", "journal-entries", has_number=True), name="journal-entries")
 app.add_typer(make_resource_app("bank transfers", "bank-transfer", "bank-transfers", has_number=True), name="bank-transfers")
-app.add_typer(make_resource_app("fixed assets", "fixed-asset", "fixed-assets", has_number=True), name="fixed-assets")
+app.add_typer(make_resource_app("fixed assets", "fixed-asset", "fixed-assets", has_patch=True, has_number=True), name="fixed-assets")
 app.add_typer(make_resource_app("depreciation books", "depreciation-book", "depreciation-books"), name="depreciation-books")
 
 # Entities
-app.add_typer(make_resource_app("customers", "customer", "customers"), name="customers")
-app.add_typer(make_resource_app("vendors", "vendor", "vendors"), name="vendors")
-app.add_typer(make_resource_app("items", "item", "items"), name="items")
+app.add_typer(make_resource_app("customers", "customer", "customers", has_patch=True), name="customers")
+app.add_typer(make_resource_app("vendors", "vendor", "vendors", has_patch=True), name="vendors")
+app.add_typer(make_resource_app("items", "item", "items", has_patch=True), name="items")
 app.add_typer(make_resource_app("companies", "company", "companies"), name="companies")
-app.add_typer(make_resource_app("classifications", "classification", "classifications"), name="classifications")
+app.add_typer(make_resource_app("classifications", "classification", "classifications", has_patch=True), name="classifications")
 
 # Recurring
 recurring_app = typer.Typer(help="Manage recurring records", no_args_is_help=True, cls=HelpfulGroup)
@@ -70,7 +77,7 @@ recurring_app.add_typer(make_resource_app("recurring journal entries", "recurrin
 app.add_typer(recurring_app, name="recurring")
 
 # Other
-app.add_typer(make_resource_app("contracts", "contract", "contracts"), name="contracts")
+app.add_typer(make_resource_app("contracts", "contract", "contracts", has_patch=True), name="contracts")
 app.add_typer(make_resource_app("budgets", "budget", "budgets"), name="budgets")
 app.add_typer(make_resource_app("workflows", "workflow", "workflows", has_create=False, has_update=False), name="workflows")
 app.add_typer(
@@ -79,7 +86,7 @@ app.add_typer(
         "intercompany-journal-entry",
         "intercompany-journal-entries",
         has_number=True,
-        has_post=True,
+        post_writable=IJE_POST_WRITABLE,
         filters={"company"},
         template=IJE_TEMPLATE,
         checks=IJE_CHECKS,
