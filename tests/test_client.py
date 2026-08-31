@@ -408,3 +408,96 @@ class TestRetryAfterAndConflicts:
         assert data == {"internal_id": 9}
         keys = {c.request.headers["Idempotency-Key"] for c in route.calls}
         assert len(keys) == 1
+
+
+class TestRetryAfterCeilingAndConflictDetail:
+    BASE = "https://api.dualentry.com/public/v2"
+
+    @pytest.fixture
+    def sleeps(self, monkeypatch):
+        recorded = []
+        monkeypatch.setattr("dualentry_cli.client.time", SimpleNamespace(sleep=recorded.append))
+        return recorded
+
+    @staticmethod
+    def _client():
+        from dualentry_cli.client import DualEntryClient
+
+        return DualEntryClient(api_url="https://api.dualentry.com", api_key="test_key", retry=True)
+
+    @pytest.mark.parametrize("unreadable", ["soon", "2.5", "-5", ""])
+    @respx.mock
+    def test_conflict_with_unreadable_retry_after_still_retries(self, sleeps, unreadable):
+        route = respx.post(f"{self.BASE}/invoices/").mock(
+            side_effect=[
+                httpx.Response(409, headers={"Retry-After": unreadable}, json={}),
+                httpx.Response(201, json={"internal_id": 5}),
+            ]
+        )
+
+        data = self._client().post("/invoices/", json={})
+
+        assert data == {"internal_id": 5}
+        assert route.call_count == 2
+        assert sleeps == [1], f"{unreadable!r} should fall back to the backoff, not cancel the retry"
+        assert len({c.request.headers["Idempotency-Key"] for c in route.calls}) == 1
+
+    @pytest.mark.parametrize("status", [409, 429, 503])
+    @respx.mock
+    def test_retry_after_beyond_the_ceiling_is_reported_not_slept_through(self, sleeps, status):
+        from dualentry_cli.client import APIError
+
+        route = respx.post(f"{self.BASE}/invoices/").mock(return_value=httpx.Response(status, headers={"Retry-After": "3600"}, json={}))
+
+        with pytest.raises(APIError) as exc:
+            self._client().post("/invoices/", json={})
+
+        assert route.call_count == 1, "no point retrying on a schedule we refuse to wait for"
+        assert sleeps == [], "the whole point: we never sleep 3600s"
+        assert exc.value.status_code == status
+        assert "3600" in exc.value.detail, "the user still needs to know how long the server asked for"
+
+    @respx.mock
+    def test_retry_after_at_the_ceiling_is_still_honoured(self, sleeps):
+        from dualentry_cli.client import _MAX_RETRY_AFTER
+
+        respx.post(f"{self.BASE}/invoices/").mock(
+            side_effect=[
+                httpx.Response(429, headers={"Retry-After": str(_MAX_RETRY_AFTER)}, json={}),
+                httpx.Response(201, json={"internal_id": 6}),
+            ]
+        )
+
+        self._client().post("/invoices/", json={})
+
+        assert sleeps == [_MAX_RETRY_AFTER], "the ceiling itself is allowed"
+
+    @respx.mock
+    def test_conflict_without_a_key_keeps_the_server_message(self, sleeps):
+        from dualentry_cli.client import APIError
+
+        respx.get(f"{self.BASE}/invoices/").mock(return_value=httpx.Response(409, json={"errors": {"__all__": ["period is closed"]}}))
+
+        with pytest.raises(APIError) as exc:
+            self._client().get("/invoices/")
+
+        assert exc.value.detail == "period is closed"
+        assert "256 KB" not in exc.value.detail
+        assert sleeps == []
+
+    @respx.mock
+    def test_conflict_on_a_write_keeps_both_the_guidance_and_the_server_message(self):
+        from dualentry_cli.client import APIError
+
+        respx.post(f"{self.BASE}/invoices/").mock(return_value=httpx.Response(409, json={"errors": {"__all__": ["response cannot be replayed"]}}))
+
+        with pytest.raises(APIError) as exc:
+            self._client().post("/invoices/", json={})
+
+        assert "256 KB" in exc.value.detail, "the write did carry a key, so the guidance applies"
+        assert "response cannot be replayed" in exc.value.detail, "and the server's own words survive"
+
+    def test_backoff_table_and_retry_count_cannot_drift(self):
+        from dualentry_cli.client import _MAX_RETRIES, _RETRY_DELAYS
+
+        assert len(_RETRY_DELAYS) == _MAX_RETRIES
