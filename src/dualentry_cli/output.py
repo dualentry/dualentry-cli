@@ -85,12 +85,25 @@ def _print_list(data: dict, resource: str) -> None:
         console.print(f"\n[dim]Showing {len(items)} of {data['count']}[/dim]")
 
 
+def _warn_truncated_lines(record: dict) -> None:
+    if not record.get("has_more_lines"):
+        return
+    shown = len(record.get("items") or [])
+    total = record.get("lines_count")
+    if isinstance(total, int) and total > shown:
+        msg = f"Warning: showing {shown} of {total} lines. The API caps inline lines at 100."
+    else:
+        msg = f"Warning: showing {shown} lines. The API omitted the rest."
+    console.print(f"\n[yellow]{msg}[/yellow]")
+
+
 def _print_detail(data: dict, resource: str) -> None:
     detail_fn = _FORMATTERS.get(resource, (None, None))[1]
     if detail_fn:
         detail_fn(data)
     else:
         _print_generic_detail(data)
+    _warn_truncated_lines(data)
 
 
 # ── Shared: Transaction list (records with #, Date, Counterparty, Amount) ──
