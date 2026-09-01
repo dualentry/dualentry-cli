@@ -1,0 +1,16 @@
+---
+description: "Public-repo information exposure policy: what never goes into commits, PRs, code, or fixtures"
+globs: []
+alwaysApply: true
+---
+
+# Information Exposure (public repository)
+
+This repository is public. Hard rules for everything written here — commit messages, PR text, code, docs, and fixtures:
+
+- NO internal content: ticket/Slack/meeting excerpts, customer or organization names, employee emails, internal URLs (Linear, Notion, Slack, Grain), internal hostnames, AWS account IDs, or infrastructure details.
+- NO security detail in commit/PR text: never name the vulnerability class or exploit path; use neutral wording ("harden input validation").
+- NO secrets anywhere: tokens, API keys, JWTs, cookies, connection strings — including test fixtures and recorded HTTP mocks.
+- NO AI/agent attribution: no `Co-authored-by` / `Generated-with` trailers; commit as the user's configured git identity.
+
+Full policy: see `AGENTS.md`.

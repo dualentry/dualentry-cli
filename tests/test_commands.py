@@ -207,3 +207,47 @@ class TestUnknownCommandSuggestions:
         assert result.exit_code == 2
         assert "Unknown command 'zzzzzz'" in result.output
         assert "Did you mean" not in result.output
+
+
+class TestListAllTruncation:
+    def test_all_passes_offset_to_paginate(self, mock_get_client):
+        mock_get_client.paginate.return_value = {"items": [], "count": 0}
+        result = runner.invoke(app, ["invoices", "list", "--all", "--offset", "100"])
+        assert result.exit_code == 0
+        mock_get_client.paginate.assert_called_once_with("/invoices/", params={}, start_offset=100)
+
+    def test_all_truncation_prints_resume_command(self, mock_get_client):
+        mock_get_client.paginate.return_value = {
+            "items": [{"internal_id": 1, "number": 1}],
+            "count": 250000,
+            "next_offset": 100000,
+        }
+        result = runner.invoke(app, ["invoices", "list", "--all", "--search", "acme", "--company", "9"])
+        assert result.exit_code == 0
+        assert "reached 100000 of 250000" in result.output
+        assert "dualentry invoices list --all --offset 100000" in result.output
+        assert "--search acme" in result.output
+        assert "--company 9" in result.output
+        # Warning must come after the list so users see it without scrolling up.
+        assert result.output.index("Showing") < result.output.index("reached 100000 of 250000")
+        mock_get_client.paginate.assert_called_once_with(
+            "/invoices/",
+            params={"search": "acme", "company_id": "9"},
+            start_offset=0,
+        )
+
+    def test_resume_command_helper_for_nested_path(self):
+        from dualentry_cli.commands import _resume_all_command
+
+        cmd = _resume_all_command("recurring/invoices", 200, {"status": "posted"})
+        assert cmd == "dualentry recurring invoices list --all --offset 200 --status posted"
+
+    def test_complete_all_does_not_warn(self, mock_get_client):
+        mock_get_client.paginate.return_value = {
+            "items": [{"internal_id": 1, "number": 1}],
+            "count": 1,
+        }
+        result = runner.invoke(app, ["invoices", "list", "--all"])
+        assert result.exit_code == 0
+        assert "Warning" not in result.output
+        assert "stopped at the" not in result.output
