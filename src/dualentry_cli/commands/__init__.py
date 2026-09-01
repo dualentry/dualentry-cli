@@ -72,15 +72,60 @@ def _build_filter_params(
     return params
 
 
+# Map _do_list filter kwargs to CLI flags for the --all resume hint.
+_FILTER_CLI_FLAGS = (
+    ("search", "--search"),
+    ("status", "--status"),
+    ("start_date", "--start-date"),
+    ("end_date", "--end-date"),
+    ("company_id", "--company"),
+    ("customer_id", "--customer"),
+    ("vendor_id", "--vendor"),
+)
+
+
+def _resume_all_command(path: str, next_offset: int, filters: dict) -> str:
+    """Build a copy-paste dualentry list --all command that continues from next_offset."""
+    parts = ["dualentry", *path.split("/"), "list", "--all", "--offset", str(next_offset)]
+    for key, flag in _FILTER_CLI_FLAGS:
+        value = filters.get(key)
+        if value is not None:
+            parts.extend([flag, str(value)])
+    return " ".join(parts)
+
+
+def _warn_all_truncated(path: str, *, fetched_through: int, total: int, next_offset: int, filters: dict) -> None:
+    """Tell the user --all stopped early and how to continue."""
+    from dualentry_cli.client import _MAX_PAGES
+
+    cmd = _resume_all_command(path, next_offset, filters)
+    typer.secho(
+        f"Warning: fetched {fetched_through} of {total} items; stopped at the {_MAX_PAGES}-page limit.\nTo continue, re-run with the same filters:\n  {cmd}",
+        fg=typer.colors.YELLOW,
+        err=True,
+    )
+
+
 def _do_list(client, path: str, resource: str, *, limit: int, offset: int, all_pages: bool, output: str, **filters):
     """Shared list logic for all resources."""
     params = _build_filter_params(**filters)
+    next_offset = None
     if all_pages:
-        data = client.paginate(f"/{path}/", params=params)
+        data = client.paginate(f"/{path}/", params=params, start_offset=offset)
+        next_offset = data.pop("next_offset", None)
     else:
         params.update({"limit": limit, "offset": offset})
         data = client.get(f"/{path}/", params=params)
     format_output(data, resource=resource, fmt=output)
+    # After the table so the resume hint is visible without scrolling up.
+    if next_offset is not None:
+        _warn_all_truncated(
+            path,
+            fetched_through=next_offset,
+            total=data.get("count", next_offset),
+            next_offset=next_offset,
+            filters=filters,
+        )
 
 
 def _load_json_file(file: Path) -> dict:

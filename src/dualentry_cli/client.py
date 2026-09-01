@@ -33,6 +33,10 @@ _RETRY_AFTER_HEADER = "Retry-After"
 
 _MAX_RETRY_AFTER = 60
 
+# Hard ceiling for --all crawls: page_size 100 x 1000 pages = 100_000 items.
+# Truncation must warn; never report the truncated length as the API total.
+_MAX_PAGES = 1000
+
 
 def _retry_after_seconds(response: httpx.Response) -> int | None:
     """Seconds from the Retry-After header, or None if absent or unusable."""
@@ -206,27 +210,47 @@ class DualEntryClient:
     def get(self, path: str, params: dict[str, Any] | None = None) -> dict:
         return self._request("GET", path, params=params)
 
-    def paginate(self, path: str, params: dict[str, Any] | None = None, page_size: int = 100, max_items: int | None = None) -> dict:
-        """Fetch all pages and return combined {items: [...], count: N}."""
+    def paginate(
+        self,
+        path: str,
+        params: dict[str, Any] | None = None,
+        page_size: int = 100,
+        max_items: int | None = None,
+        *,
+        start_offset: int = 0,
+    ) -> dict:
+        """
+        Fetch pages and return {items, count}.
+
+        ``count`` is the API total. When the page ceiling (or ``max_items``) stops
+        the crawl early, ``next_offset`` is set so callers can resume.
+        """
         params = dict(params or {})
         params["limit"] = page_size
-        params["offset"] = 0
-        all_items = []
-        max_pages = 1000
+        params["offset"] = start_offset
+        all_items: list = []
+        total = 0
+        truncated = False
 
-        for _ in range(max_pages):
+        for _ in range(_MAX_PAGES):
             data = self.get(path, params=params)
             items = data.get("items", [])
             all_items.extend(items)
-            total = data.get("count", len(items))
+            total = data.get("count", start_offset + len(all_items))
             if max_items and len(all_items) >= max_items:
                 all_items = all_items[:max_items]
+                truncated = start_offset + len(all_items) < total
                 break
-            if len(all_items) >= total or not items:
+            if start_offset + len(all_items) >= total or not items:
                 break
             params["offset"] += page_size
+        else:
+            truncated = start_offset + len(all_items) < total
 
-        return {"items": all_items, "count": len(all_items)}
+        result: dict[str, Any] = {"items": all_items, "count": total}
+        if truncated:
+            result["next_offset"] = start_offset + len(all_items)
+        return result
 
     def post(self, path: str, json: dict[str, Any] | None = None) -> dict:
         return self._request("POST", path, json=json)

@@ -501,3 +501,65 @@ class TestRetryAfterCeilingAndConflictDetail:
         from dualentry_cli.client import _MAX_RETRIES, _RETRY_DELAYS
 
         assert len(_RETRY_DELAYS) == _MAX_RETRIES
+
+
+class TestPaginate:
+    BASE = "https://api.dualentry.com/public/v2"
+
+    @staticmethod
+    def _client():
+        from dualentry_cli.client import DualEntryClient
+
+        return DualEntryClient(api_url="https://api.dualentry.com", api_key="test_key")
+
+    @respx.mock
+    def test_complete_crawl_has_no_next_offset(self):
+        respx.get(f"{self.BASE}/invoices/").mock(
+            side_effect=[
+                httpx.Response(200, json={"items": [{"id": 1}, {"id": 2}], "count": 3}),
+                httpx.Response(200, json={"items": [{"id": 3}], "count": 3}),
+            ]
+        )
+
+        data = self._client().paginate("/invoices/", page_size=2)
+
+        assert data["items"] == [{"id": 1}, {"id": 2}, {"id": 3}]
+        assert data["count"] == 3
+        assert "next_offset" not in data
+
+    @respx.mock
+    def test_page_cap_sets_next_offset_and_keeps_api_count(self, monkeypatch):
+        monkeypatch.setattr("dualentry_cli.client._MAX_PAGES", 2)
+
+        def _page(request: httpx.Request) -> httpx.Response:
+            offset = int(request.url.params.get("offset", "0"))
+            return httpx.Response(200, json={"items": [{"id": offset}, {"id": offset + 1}], "count": 10})
+
+        respx.get(f"{self.BASE}/invoices/").mock(side_effect=_page)
+
+        data = self._client().paginate("/invoices/", page_size=2)
+
+        assert len(data["items"]) == 4
+        assert data["count"] == 10
+        assert data["next_offset"] == 4
+
+    @respx.mock
+    def test_start_offset_is_sent_on_first_request(self):
+        route = respx.get(f"{self.BASE}/invoices/").mock(return_value=httpx.Response(200, json={"items": [{"id": 5}], "count": 5}))
+
+        data = self._client().paginate("/invoices/", page_size=2, start_offset=4)
+
+        assert data["items"] == [{"id": 5}]
+        assert data["count"] == 5
+        assert "next_offset" not in data
+        assert route.calls[0].request.url.params["offset"] == "4"
+
+    @respx.mock
+    def test_max_items_truncation_sets_next_offset(self):
+        respx.get(f"{self.BASE}/invoices/").mock(return_value=httpx.Response(200, json={"items": [{"id": 1}, {"id": 2}, {"id": 3}], "count": 9}))
+
+        data = self._client().paginate("/invoices/", page_size=3, max_items=2)
+
+        assert data["items"] == [{"id": 1}, {"id": 2}]
+        assert data["count"] == 9
+        assert data["next_offset"] == 2
