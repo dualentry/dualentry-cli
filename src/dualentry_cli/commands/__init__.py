@@ -236,7 +236,7 @@ def make_resource_app(
 
         get_cmd_by_id.__doc__ = f"Get a {resource} by ID."
 
-    elif has_get:
+    elif has_get and not has_number:
 
         @app.command("get")
         def get_cmd(
