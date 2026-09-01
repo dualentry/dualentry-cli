@@ -241,3 +241,13 @@ class TestListAllTruncation:
 
         cmd = _resume_all_command("recurring/invoices", 200, {"status": "posted"})
         assert cmd == "dualentry recurring invoices list --all --offset 200 --status posted"
+
+    def test_complete_all_does_not_warn(self, mock_get_client):
+        mock_get_client.paginate.return_value = {
+            "items": [{"internal_id": 1, "number": 1}],
+            "count": 1,
+        }
+        result = runner.invoke(app, ["invoices", "list", "--all"])
+        assert result.exit_code == 0
+        assert "Warning" not in result.output
+        assert "stopped at the" not in result.output

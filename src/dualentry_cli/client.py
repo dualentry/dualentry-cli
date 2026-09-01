@@ -220,17 +220,17 @@ class DualEntryClient:
         start_offset: int = 0,
     ) -> dict:
         """
-        Fetch pages and return {items, count}.
+        Fetch pages and return {items, count, next_offset?}.
 
-        ``count`` is the API total. When the page ceiling (or ``max_items``) stops
-        the crawl early, ``next_offset`` is set so callers can resume.
+        ``count`` is always the API total, regardless of truncation.
+        When the page ceiling (or ``max_items``) stops the crawl early,
+        ``next_offset`` is set so callers can resume.
         """
         params = dict(params or {})
         params["limit"] = page_size
         params["offset"] = start_offset
         all_items: list = []
         total = 0
-        truncated = False
 
         for _ in range(_MAX_PAGES):
             data = self.get(path, params=params)
@@ -239,16 +239,13 @@ class DualEntryClient:
             total = data.get("count", start_offset + len(all_items))
             if max_items and len(all_items) >= max_items:
                 all_items = all_items[:max_items]
-                truncated = start_offset + len(all_items) < total
                 break
             if start_offset + len(all_items) >= total or not items:
                 break
             params["offset"] += page_size
-        else:
-            truncated = start_offset + len(all_items) < total
 
         result: dict[str, Any] = {"items": all_items, "count": total}
-        if truncated:
+        if start_offset + len(all_items) < total:
             result["next_offset"] = start_offset + len(all_items)
         return result
 

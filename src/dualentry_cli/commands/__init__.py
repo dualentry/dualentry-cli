@@ -9,6 +9,7 @@ from pathlib import Path
 import typer
 
 from dualentry_cli.cli import HelpfulGroup
+from dualentry_cli.client import _MAX_PAGES
 from dualentry_cli.output import _RECORD_PREFIX, format_output
 
 # ── Shared option defaults ──────────────────────────────────────────
@@ -73,21 +74,21 @@ def _build_filter_params(
 
 
 # Map _do_list filter kwargs to CLI flags for the --all resume hint.
-_FILTER_CLI_FLAGS = (
-    ("search", "--search"),
-    ("status", "--status"),
-    ("start_date", "--start-date"),
-    ("end_date", "--end-date"),
-    ("company_id", "--company"),
-    ("customer_id", "--customer"),
-    ("vendor_id", "--vendor"),
-)
+_FILTER_CLI_FLAGS = {
+    "search": "--search",
+    "status": "--status",
+    "start_date": "--start-date",
+    "end_date": "--end-date",
+    "company_id": "--company",
+    "customer_id": "--customer",
+    "vendor_id": "--vendor",
+}
 
 
 def _resume_all_command(path: str, next_offset: int, filters: dict) -> str:
     """Build a copy-paste dualentry list --all command that continues from next_offset."""
     parts = ["dualentry", *path.split("/"), "list", "--all", "--offset", str(next_offset)]
-    for key, flag in _FILTER_CLI_FLAGS:
+    for key, flag in _FILTER_CLI_FLAGS.items():
         value = filters.get(key)
         if value is not None:
             parts.extend([flag, str(value)])
@@ -96,8 +97,6 @@ def _resume_all_command(path: str, next_offset: int, filters: dict) -> str:
 
 def _warn_all_truncated(path: str, *, fetched_through: int, total: int, next_offset: int, filters: dict) -> None:
     """Tell the user --all stopped early and how to continue."""
-    from dualentry_cli.client import _MAX_PAGES
-
     cmd = _resume_all_command(path, next_offset, filters)
     typer.secho(
         f"Warning: fetched {fetched_through} of {total} items; stopped at the {_MAX_PAGES}-page limit.\nTo continue, re-run with the same filters:\n  {cmd}",
