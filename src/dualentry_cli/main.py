@@ -61,13 +61,13 @@ app.add_typer(
     make_resource_app("fixed assets", "fixed-asset", "fixed-assets", has_number=True, filters={"search", "status", "company", "customer", "vendor"}),
     name="fixed-assets",
 )
-app.add_typer(make_resource_app("depreciation books", "depreciation-book", "depreciation-books", filters=set()), name="depreciation-books")
+app.add_typer(make_resource_app("depreciation books", "depreciation-book", "depreciation-books", has_create=False, has_update=False, filters=set()), name="depreciation-books")
 
 # Entities
 app.add_typer(make_resource_app("customers", "customer", "customers", filters={"search", "status", "company"}), name="customers")
 app.add_typer(make_resource_app("vendors", "vendor", "vendors", filters=TXN), name="vendors")
 app.add_typer(make_resource_app("items", "item", "items", filters={"search", "status"}), name="items")
-app.add_typer(make_resource_app("companies", "company", "companies", filters={"search"}), name="companies")
+app.add_typer(make_resource_app("companies", "company", "companies", has_create=False, has_update=False, filters={"search"}), name="companies")
 app.add_typer(make_resource_app("classifications", "classification", "classifications", filters={"search"}), name="classifications")
 
 # Recurring
@@ -84,7 +84,7 @@ app.add_typer(recurring_app, name="recurring")
 # Other
 # Contracts name their status filter `status`, not `record_status`.
 app.add_typer(make_resource_app("contracts", "contract", "contracts", filters=TXN_CUSTOMER, status_param="status"), name="contracts")
-app.add_typer(make_resource_app("budgets", "budget", "budgets", filters={"search", "status", "company"}), name="budgets")
+app.add_typer(make_resource_app("budgets", "budget", "budgets", has_create=False, has_update=False, filters={"search", "status", "company"}), name="budgets")
 app.add_typer(
     make_resource_app("workflows", "workflow", "workflows", has_create=False, has_update=False, filters={"search", "company"}),
     name="workflows",
@@ -103,8 +103,8 @@ app.add_typer(
     ),
     name="intercompany-journal-entries",
 )
-app.add_typer(make_resource_app("paper checks", "paper-check", "paper-checks", has_number=True, filters=TXN_ALL_PARTIES), name="paper-checks")
-app.add_typer(make_resource_app("inbox items", "inbox-item", "inbox", has_create=False, has_update=False, filters={"search"}), name="inbox")
+app.add_typer(make_resource_app("paper checks", "paper-check", "paper-checks", has_create=False, has_update=False, filters=TXN_ALL_PARTIES), name="paper-checks")
+app.add_typer(make_resource_app("inbox items", "inbox-item", "inbox", has_get=False, has_create=False, has_update=False, filters={"search"}), name="inbox")
 
 
 def version_callback(value: bool):
