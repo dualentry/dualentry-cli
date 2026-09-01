@@ -99,7 +99,7 @@ def _warn_all_truncated(path: str, *, fetched_through: int, total: int, next_off
     """Tell the user --all stopped early and how to continue."""
     cmd = _resume_all_command(path, next_offset, filters)
     typer.secho(
-        f"Warning: fetched {fetched_through} of {total} items; stopped at the {_MAX_PAGES}-page limit.\nTo continue, re-run with the same filters:\n  {cmd}",
+        f"Warning: reached {fetched_through} of {total} items; stopped at the {_MAX_PAGES}-page limit.\nTo continue, re-run with the same filters:\n  {cmd}",
         fg=typer.colors.YELLOW,
         err=True,
     )

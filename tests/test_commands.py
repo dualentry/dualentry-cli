@@ -224,12 +224,12 @@ class TestListAllTruncation:
         }
         result = runner.invoke(app, ["invoices", "list", "--all", "--search", "acme", "--company", "9"])
         assert result.exit_code == 0
-        assert "fetched 100000 of 250000" in result.output
+        assert "reached 100000 of 250000" in result.output
         assert "dualentry invoices list --all --offset 100000" in result.output
         assert "--search acme" in result.output
         assert "--company 9" in result.output
         # Warning must come after the list so users see it without scrolling up.
-        assert result.output.index("Showing") < result.output.index("fetched 100000 of 250000")
+        assert result.output.index("Showing") < result.output.index("reached 100000 of 250000")
         mock_get_client.paginate.assert_called_once_with(
             "/invoices/",
             params={"search": "acme", "company_id": "9"},
