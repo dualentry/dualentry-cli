@@ -118,6 +118,26 @@ jobs:
           cd /tmp/tap
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          BRANCH="update-dualentry-$VERSION"
+          git checkout -b "$BRANCH"
           git add Formula/dualentry.rb
           git commit -m "Update dualentry to $VERSION"
-          git push
+          git push origin "$BRANCH"
+
+          # main is a protected branch on the tap repo (PR required), so push a
+          # branch and PR it instead of pushing straight to main.
+          export GH_TOKEN="$TAP_TOKEN"
+          PR_URL=$(gh pr create --repo dualentry/homebrew-tap \
+            --title "Update dualentry to $VERSION" \
+            --body "Automated formula update for dualentry $VERSION." \
+            --head "$BRANCH" --base main)
+          echo "Opened $PR_URL"
+
+          if gh pr merge --repo dualentry/homebrew-tap "$BRANCH" --squash --delete-branch; then
+            echo "Merged $PR_URL"
+          elif gh pr merge --repo dualentry/homebrew-tap "$BRANCH" --auto --squash --delete-branch; then
+            echo "Enabled auto-merge for $PR_URL"
+          else
+            echo "::warning::Could not merge or enable auto-merge for $PR_URL — merge it manually."
+          fi
