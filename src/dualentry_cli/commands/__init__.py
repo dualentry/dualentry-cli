@@ -8,9 +8,21 @@ from pathlib import Path
 
 import typer
 
-from dualentry_cli.cli import HelpfulGroup
+from dualentry_cli.cli import HelpfulGroup, make_list_command_cls
 from dualentry_cli.client import _MAX_PAGES
 from dualentry_cli.output import _RECORD_PREFIX, format_output
+
+# Filter flags `list` can offer, with every option spelling each one accepts.
+FILTER_OPTIONS = {
+    "search": ("--search", "-s"),
+    "status": ("--status",),
+    "start_date": ("--start-date",),
+    "end_date": ("--end-date",),
+    "company": ("--company", "-c"),
+    "customer": ("--customer",),
+    "vendor": ("--vendor",),
+}
+ALL_FILTERS = frozenset(FILTER_OPTIONS)
 
 # ── Shared option defaults ──────────────────────────────────────────
 
@@ -52,11 +64,17 @@ def _strip_record_prefix(number: str) -> str:
     return number
 
 
+def _supplied(value) -> str | None:
+    """Return a flag's value, or None when a stripped option left its OptionInfo sentinel unbound."""
+    return value if isinstance(value, str) else None
+
+
 def _build_filter_params(
     search: str | None = None,
     status: str | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
+    status_param: str = "record_status",
     **extra,
 ) -> dict:
     """Build filter query params, omitting None values."""
@@ -64,7 +82,7 @@ def _build_filter_params(
     if search:
         params["search"] = search
     if status:
-        params["record_status"] = status
+        params[status_param] = status
     if start_date:
         params["start_date"] = start_date
     if end_date:
@@ -170,18 +188,31 @@ def make_resource_app(
     has_delete: bool = False,
     has_number: bool = False,
     has_post: bool = False,
-    filters: set[str] | None = None,
+    filters: set[str],
+    status_param: str = "record_status",
     template: dict | None = None,
     checks: list[Callable] | None = None,
     online_checks: list[Callable] | None = None,
 ) -> typer.Typer:
-    """Create a Typer app for a standard CRUD resource."""
+    """
+    Create a Typer app for a standard CRUD resource.
+
+    `filters` lists the flags this resource's v2 list endpoint declares; the rest
+    are removed from `list` so the API cannot silently drop them.
+    """
     import inspect
 
     app = typer.Typer(help=f"Manage {name}", no_args_is_help=True, cls=HelpfulGroup)
-    enabled_filters = filters or set()
+    unknown = filters - ALL_FILTERS
+    if unknown:
+        msg = f"{name}: unknown filter flags {sorted(unknown)}"
+        raise ValueError(msg)
+    remove = ALL_FILTERS - filters
 
-    @app.command("list")
+    gated_options = {option for flag in remove for option in FILTER_OPTIONS[flag]}
+    offered_options = sorted(FILTER_OPTIONS[flag][0] for flag in filters)
+
+    @app.command("list", cls=make_list_command_cls(name, offered_options, gated_options))
     def list_cmd(
         *,
         limit: int = Limit,
@@ -207,19 +238,18 @@ def make_resource_app(
             offset=offset,
             all_pages=all_pages,
             output=output,
-            search=search,
-            status=status,
-            start_date=start_date,
-            end_date=end_date,
-            company_id=company if isinstance(company, str) else None,
-            customer_id=customer if isinstance(customer, str) else None,
-            vendor_id=vendor if isinstance(vendor, str) else None,
+            search=_supplied(search),
+            status=_supplied(status),
+            start_date=_supplied(start_date),
+            end_date=_supplied(end_date),
+            status_param=status_param,
+            company_id=_supplied(company),
+            customer_id=_supplied(customer),
+            vendor_id=_supplied(vendor),
         )
 
     list_cmd.__doc__ = f"List {name}."
 
-    all_filters = {"company", "customer", "vendor"}
-    remove = all_filters - enabled_filters
     if remove:
         sig = inspect.signature(list_cmd)
         list_cmd.__signature__ = sig.replace(parameters=[p for p in sig.parameters.values() if p.name not in remove])

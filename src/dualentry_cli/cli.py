@@ -4,9 +4,9 @@ import difflib
 
 import typer
 
-# typer >= 0.26 vendors click; TyperGroup raises the vendored UsageError.
-from typer._click.exceptions import UsageError
-from typer.core import TyperGroup
+# typer >= 0.26 vendors click; the parser raises the vendored exceptions.
+from typer._click.exceptions import NoSuchOption, UsageError
+from typer.core import TyperCommand, TyperGroup
 
 LOGO = r"""
  /$$$$$$$                      /$$                       /$$
@@ -21,6 +21,23 @@ LOGO = r"""
                                                                           |  $$$$$$/
                                                                            \______/
 """
+
+
+def make_list_command_cls(name: str, offered_options: list[str], gated_options: set[str]) -> type[TyperCommand]:
+    """Build a list-command class that names the resource when a gated filter flag is passed."""
+    offered = ", ".join(offered_options) or "none"
+
+    class ResourceListCommand(TyperCommand):
+        def parse_args(self, ctx, args):
+            try:
+                return super().parse_args(ctx, args)
+            except NoSuchOption as exc:
+                if exc.option_name not in gated_options:
+                    raise
+                message = f"{name} does not support {exc.option_name}. Supported filters: {offered}."
+                raise UsageError(message, ctx=ctx) from None
+
+    return ResourceListCommand
 
 
 class HelpfulGroup(TyperGroup):
