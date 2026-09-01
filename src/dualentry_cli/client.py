@@ -19,7 +19,8 @@ _RETRYABLE_STATUS_CODES = {429, 502, 503, 504}
 # way every time, so retrying only delays the error the user needs to see.
 _RETRYABLE_EXCEPTIONS = (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError)
 _RETRY_DELAYS = [1, 2, 4]  # Exponential backoff: 1s, 2s, 4s
-_MAX_RETRIES = len(_RETRY_DELAYS)
+# One initial request plus one retry per backoff delay.
+_MAX_ATTEMPTS = len(_RETRY_DELAYS) + 1
 
 # The API replays the original response for a repeated Idempotency-Key instead of
 # running the operation again, so a retried write cannot create a duplicate record.
@@ -196,7 +197,7 @@ class DualEntryClient:
 
             # every retry waits, including the one after the loop
             delay = retry_after if retry_after is not None else backoff
-            print(f"\033[33mRetrying in {delay}s... (attempt {attempt + 2}/{_MAX_RETRIES + 1})\033[0m", file=sys.stderr)
+            print(f"\033[33mRetrying in {delay}s... (attempt {attempt + 2}/{_MAX_ATTEMPTS})\033[0m", file=sys.stderr)
             time.sleep(delay)
 
         # Final attempt

@@ -53,13 +53,13 @@ app.add_typer(make_resource_app("direct expenses", "direct-expense", "direct-exp
 app.add_typer(make_resource_app("journal entries", "journal-entry", "journal-entries", has_number=True), name="journal-entries")
 app.add_typer(make_resource_app("bank transfers", "bank-transfer", "bank-transfers", has_number=True), name="bank-transfers")
 app.add_typer(make_resource_app("fixed assets", "fixed-asset", "fixed-assets", has_number=True), name="fixed-assets")
-app.add_typer(make_resource_app("depreciation books", "depreciation-book", "depreciation-books"), name="depreciation-books")
+app.add_typer(make_resource_app("depreciation books", "depreciation-book", "depreciation-books", has_create=False, has_update=False), name="depreciation-books")
 
 # Entities
 app.add_typer(make_resource_app("customers", "customer", "customers"), name="customers")
 app.add_typer(make_resource_app("vendors", "vendor", "vendors"), name="vendors")
 app.add_typer(make_resource_app("items", "item", "items"), name="items")
-app.add_typer(make_resource_app("companies", "company", "companies"), name="companies")
+app.add_typer(make_resource_app("companies", "company", "companies", has_create=False, has_update=False), name="companies")
 app.add_typer(make_resource_app("classifications", "classification", "classifications"), name="classifications")
 
 # Recurring
@@ -71,7 +71,7 @@ app.add_typer(recurring_app, name="recurring")
 
 # Other
 app.add_typer(make_resource_app("contracts", "contract", "contracts"), name="contracts")
-app.add_typer(make_resource_app("budgets", "budget", "budgets"), name="budgets")
+app.add_typer(make_resource_app("budgets", "budget", "budgets", has_create=False, has_update=False), name="budgets")
 app.add_typer(make_resource_app("workflows", "workflow", "workflows", has_create=False, has_update=False), name="workflows")
 app.add_typer(
     make_resource_app(
@@ -87,8 +87,8 @@ app.add_typer(
     ),
     name="intercompany-journal-entries",
 )
-app.add_typer(make_resource_app("paper checks", "paper-check", "paper-checks", has_number=True), name="paper-checks")
-app.add_typer(make_resource_app("inbox items", "inbox-item", "inbox", has_create=False, has_update=False), name="inbox")
+app.add_typer(make_resource_app("paper checks", "paper-check", "paper-checks", has_create=False, has_update=False), name="paper-checks")
+app.add_typer(make_resource_app("inbox items", "inbox-item", "inbox", has_get=False, has_create=False, has_update=False), name="inbox")
 
 
 def version_callback(value: bool):

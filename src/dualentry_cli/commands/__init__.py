@@ -121,6 +121,7 @@ def make_resource_app(
     resource: str,
     path: str,
     *,
+    has_get: bool = True,
     has_create: bool = True,
     has_update: bool = True,
     has_delete: bool = False,
@@ -180,7 +181,7 @@ def make_resource_app(
         sig = inspect.signature(list_cmd)
         list_cmd.__signature__ = sig.replace(parameters=[p for p in sig.parameters.values() if p.name not in remove])
 
-    if has_number:
+    if has_get and has_number:
 
         @app.command("get")
         def get_cmd_auto(
@@ -234,7 +235,8 @@ def make_resource_app(
             format_output(data, resource=resource, fmt=output)
 
         get_cmd_by_id.__doc__ = f"Get a {resource} by ID."
-    else:
+
+    elif has_get:
 
         @app.command("get")
         def get_cmd(

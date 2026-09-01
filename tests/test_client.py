@@ -5,6 +5,10 @@ import httpx
 import pytest
 import respx
 
+# Retry-After values int() cannot use; every status that follows the header
+# must fall back to the exponential backoff instead.
+_UNREADABLE_RETRY_AFTER = ["next tuesday", "inf", "Infinity", "1e9", "2.5", "-5", ""]
+
 
 class TestDualEntryClient:
     def test_sets_api_key_header(self):
@@ -200,9 +204,7 @@ class TestIdempotencyKey:
         with pytest.raises(APIError):
             self._client(retry=True).post("/invoices/", json={"customer_id": 1})
 
-        # 4, not 3: the loop runs _MAX_RETRIES times and then issues one more
-        # request after it. That off-by-one is tracked separately; it is harmless
-        # here precisely because every attempt replays the same key.
+        # 4 = _MAX_ATTEMPTS: the initial request plus one retry per backoff delay.
         assert route.call_count == 4
         keys = {c.request.headers["Idempotency-Key"] for c in route.calls}
         assert len(keys) == 1, f"every attempt must reuse one key, got {keys}"
@@ -238,7 +240,8 @@ class TestIdempotencyKey:
 
 class TestRetryAfterAndConflicts:
     """
-    Retry timing follows the server, and the two meanings of 409 are separated.
+    Retry timing follows the server (capped at _MAX_RETRY_AFTER), and the two
+    meanings of 409 are separated.
 
     https://docs.dualentry.com/developers/guides/rate-limiting
     https://docs.dualentry.com/developers/guides/idempotency-and-write-validation
@@ -290,7 +293,8 @@ class TestRetryAfterAndConflicts:
         assert route.call_count == 1
         assert sleeps == []
         assert exc.value.status_code == 409
-        assert "256 KB" in exc.value.detail
+        assert "256 KB" in exc.value.detail, "the write carried a key, so the replay guidance applies"
+        assert "original response cannot be replayed" in exc.value.detail, "and the server's own words survive"
 
     @respx.mock
     def test_rate_limit_waits_for_retry_after_not_the_hardcoded_backoff(self, sleeps):
@@ -331,7 +335,7 @@ class TestRetryAfterAndConflicts:
         assert sleeps == [3, 3, 3], "the request after the loop must wait too"
         assert route.call_count == len(sleeps) + 1
 
-    @pytest.mark.parametrize("bad_value", ["next tuesday", "inf", "Infinity", "1e9", "2.5", "-5", ""])
+    @pytest.mark.parametrize("bad_value", _UNREADABLE_RETRY_AFTER)
     @respx.mock
     def test_unparsable_retry_after_falls_back_to_backoff(self, sleeps, bad_value):
         """Values int() cannot use fall back to the backoff; "inf" must never reach time.sleep()."""
@@ -409,23 +413,7 @@ class TestRetryAfterAndConflicts:
         keys = {c.request.headers["Idempotency-Key"] for c in route.calls}
         assert len(keys) == 1
 
-
-class TestRetryAfterCeilingAndConflictDetail:
-    BASE = "https://api.dualentry.com/public/v2"
-
-    @pytest.fixture
-    def sleeps(self, monkeypatch):
-        recorded = []
-        monkeypatch.setattr("dualentry_cli.client.time", SimpleNamespace(sleep=recorded.append))
-        return recorded
-
-    @staticmethod
-    def _client():
-        from dualentry_cli.client import DualEntryClient
-
-        return DualEntryClient(api_url="https://api.dualentry.com", api_key="test_key", retry=True)
-
-    @pytest.mark.parametrize("unreadable", ["soon", "2.5", "-5", ""])
+    @pytest.mark.parametrize("unreadable", _UNREADABLE_RETRY_AFTER)
     @respx.mock
     def test_conflict_with_unreadable_retry_after_still_retries(self, sleeps, unreadable):
         route = respx.post(f"{self.BASE}/invoices/").mock(
@@ -485,19 +473,7 @@ class TestRetryAfterCeilingAndConflictDetail:
         assert "256 KB" not in exc.value.detail
         assert sleeps == []
 
-    @respx.mock
-    def test_conflict_on_a_write_keeps_both_the_guidance_and_the_server_message(self):
-        from dualentry_cli.client import APIError
+    def test_backoff_table_and_attempt_count_cannot_drift(self):
+        from dualentry_cli.client import _MAX_ATTEMPTS, _RETRY_DELAYS
 
-        respx.post(f"{self.BASE}/invoices/").mock(return_value=httpx.Response(409, json={"errors": {"__all__": ["response cannot be replayed"]}}))
-
-        with pytest.raises(APIError) as exc:
-            self._client().post("/invoices/", json={})
-
-        assert "256 KB" in exc.value.detail, "the write did carry a key, so the guidance applies"
-        assert "response cannot be replayed" in exc.value.detail, "and the server's own words survive"
-
-    def test_backoff_table_and_retry_count_cannot_drift(self):
-        from dualentry_cli.client import _MAX_RETRIES, _RETRY_DELAYS
-
-        assert len(_RETRY_DELAYS) == _MAX_RETRIES
+        assert len(_RETRY_DELAYS) + 1 == _MAX_ATTEMPTS
