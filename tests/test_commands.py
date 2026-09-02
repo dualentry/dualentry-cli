@@ -251,3 +251,74 @@ class TestListAllTruncation:
         assert result.exit_code == 0
         assert "Warning" not in result.output
         assert "stopped at the" not in result.output
+
+
+class TestInboxCommands:
+    def test_inbox_list_still_hits_the_summary_route(self, mock_get_client):
+        mock_get_client.get.return_value = {"transactions_count": 3, "records_count": 1}
+        result = runner.invoke(app, ["inbox", "list"])
+        assert result.exit_code == 0
+        mock_get_client.get.assert_called_once_with("/inbox/", params={"limit": 20, "offset": 0})
+
+    def test_transactions_list(self, mock_get_client):
+        mock_get_client.get.return_value = {"items": [{"record_id": 42, "number": "IN-1", "approval_status": "pending"}], "count": 1}
+        result = runner.invoke(app, ["inbox", "transactions", "list"])
+        assert result.exit_code == 0
+        assert "pending" in result.output
+        mock_get_client.get.assert_called_once_with("/inbox/transactions/", params={"limit": 20, "offset": 0})
+
+    def test_transactions_list_filters(self, mock_get_client):
+        mock_get_client.get.return_value = {"items": [], "count": 0}
+        result = runner.invoke(
+            app,
+            ["inbox", "transactions", "list", "--transaction-type", "invoice", "--transaction-type", "bill", "--status", "pending", "--min-amount", "500"],
+        )
+        assert result.exit_code == 0
+        mock_get_client.get.assert_called_once_with(
+            "/inbox/transactions/",
+            params={"approval_status": ["pending"], "transaction_type": ["invoice", "bill"], "min_amount": "500", "limit": 20, "offset": 0},
+        )
+
+    def test_transactions_get_sends_the_type_discriminator(self, mock_get_client):
+        mock_get_client.get.return_value = {"record_id": 42, "transaction_type": "invoice", "approval_status": "pending"}
+        result = runner.invoke(app, ["inbox", "transactions", "get", "42", "--transaction-type", "invoice"])
+        assert result.exit_code == 0
+        assert "pending" in result.output
+        mock_get_client.get.assert_called_once_with("/inbox/transactions/42/", params={"transaction_type": "invoice"})
+
+    def test_transactions_get_requires_the_type_discriminator(self, mock_get_client):
+        result = runner.invoke(app, ["inbox", "transactions", "get", "42"])
+        assert result.exit_code == 2
+        mock_get_client.get.assert_not_called()
+
+    def test_get_says_so_when_the_record_is_not_in_the_inbox(self, mock_get_client):
+        mock_get_client.get.return_value = {}
+        result = runner.invoke(app, ["inbox", "transactions", "get", "42", "--transaction-type", "invoice"])
+        assert result.exit_code == 0
+        assert "not in the inbox" in result.output
+
+    def test_get_json_output_stays_json_when_absent(self, mock_get_client):
+        mock_get_client.get.return_value = {}
+        result = runner.invoke(app, ["inbox", "records", "get", "7", "--record-type", "customer", "--format", "json"])
+        assert result.exit_code == 0
+        output_lines = result.output.strip().split("\n")
+        json_start = next(i for i, line in enumerate(output_lines) if line.strip().startswith("{"))
+        assert json.loads("\n".join(output_lines[json_start:])) == {}
+
+    def test_records_list(self, mock_get_client):
+        mock_get_client.get.return_value = {"items": [], "count": 0}
+        result = runner.invoke(app, ["inbox", "records", "list", "--record-type", "customer"])
+        assert result.exit_code == 0
+        mock_get_client.get.assert_called_once_with("/inbox/records/", params={"record_type": ["customer"], "limit": 20, "offset": 0})
+
+    def test_records_get_sends_the_type_discriminator(self, mock_get_client):
+        mock_get_client.get.return_value = {"record_id": 7, "record_type": "customer", "approval_status": "approved"}
+        result = runner.invoke(app, ["inbox", "records", "get", "7", "--record-type", "customer"])
+        assert result.exit_code == 0
+        mock_get_client.get.assert_called_once_with("/inbox/records/7/", params={"record_type": "customer"})
+
+    def test_resume_command_repeats_a_list_filter(self):
+        from dualentry_cli.commands import _resume_all_command
+
+        cmd = _resume_all_command("inbox/transactions", 300, {"transaction_type": ["invoice", "bill"]})
+        assert cmd == "dualentry inbox transactions list --all --offset 300 --transaction-type invoice --transaction-type bill"

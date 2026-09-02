@@ -9,6 +9,8 @@ from dualentry_cli.cli import HelpfulGroup
 from dualentry_cli.commands import make_resource_app
 from dualentry_cli.commands.accounts import app as accounts_app
 from dualentry_cli.commands.ije_extras import IJE_CHECKS, IJE_ONLINE_EXTRA_CHECKS, IJE_TEMPLATE
+from dualentry_cli.commands.inbox import records_app as inbox_records_app
+from dualentry_cli.commands.inbox import transactions_app as inbox_transactions_app
 from dualentry_cli.config import Config
 
 app = typer.Typer(name="dualentry", help="DualEntry accounting CLI", no_args_is_help=True, cls=HelpfulGroup)
@@ -104,7 +106,11 @@ app.add_typer(
     name="intercompany-journal-entries",
 )
 app.add_typer(make_resource_app("paper checks", "paper-check", "paper-checks", has_create=False, has_update=False, filters=TXN_ALL_PARTIES), name="paper-checks")
-app.add_typer(make_resource_app("inbox items", "inbox-item", "inbox", has_get=False, has_create=False, has_update=False, filters={"search"}), name="inbox")
+inbox_app = make_resource_app("inbox items", "inbox-item", "inbox", has_get=False, has_create=False, has_update=False, filters={"search"})
+# The two sub-resources carry the actual pending items; `inbox list` is the org-wide count summary.
+inbox_app.add_typer(inbox_transactions_app, name="transactions")
+inbox_app.add_typer(inbox_records_app, name="records")
+app.add_typer(inbox_app, name="inbox")
 
 
 def version_callback(value: bool):

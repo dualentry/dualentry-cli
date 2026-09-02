@@ -100,6 +100,10 @@ _FILTER_CLI_FLAGS = {
     "company_id": "--company",
     "customer_id": "--customer",
     "vendor_id": "--vendor",
+    "transaction_type": "--transaction-type",
+    "record_type": "--record-type",
+    "min_amount": "--min-amount",
+    "max_amount": "--max-amount",
 }
 
 
@@ -108,8 +112,11 @@ def _resume_all_command(path: str, next_offset: int, filters: dict) -> str:
     parts = ["dualentry", *path.split("/"), "list", "--all", "--offset", str(next_offset)]
     for key, flag in _FILTER_CLI_FLAGS.items():
         value = filters.get(key)
-        if value is not None:
-            parts.extend([flag, str(value)])
+        if value is None:
+            continue
+        # Repeatable filters arrive as a list; repeat the flag instead of printing the list.
+        for one in value if isinstance(value, list) else [value]:
+            parts.extend([flag, str(one)])
     return " ".join(parts)
 
 
