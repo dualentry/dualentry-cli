@@ -81,6 +81,7 @@ dualentry bills list --status posted --format json
 | **Accounting** | Journal Entries, Bank Transfers, Fixed Assets, Depreciation |
 | **Master Data** | Customers, Vendors, Items, Accounts, Classifications |
 | **Automation** | Recurring Invoices, Recurring Bills, Workflows, Contracts |
+| **Close Management** | Bank Match |
 
 All resources support `list`, `get`, `create`, and `update` operations.
 

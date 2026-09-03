@@ -123,6 +123,7 @@ ignore = [
     "PLR0915",
     "F841",
     "SIM105",
+    "PLR0917",
 
     # Added to ALL in ruff 0.16.0. This project declares no license and ships no
     # LICENSE file, so there is no copyright header to require.
