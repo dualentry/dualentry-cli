@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 import sys
 import time
@@ -9,6 +10,7 @@ import uuid
 from typing import Any
 
 import httpx
+import typer
 
 from dualentry_cli import USER_AGENT
 
@@ -33,6 +35,14 @@ _RETRY_AFTER_HEADER = "Retry-After"
 
 _MAX_RETRY_AFTER = 60
 
+# Every response reports the binding token bucket. A route bucket holds 10
+# requests and refills at 1/s, so a crawl that fires pages back-to-back drains
+# it by the eleventh page; the guide asks clients to slow down before that.
+# https://docs.dualentry.com/developers/guides/rate-limiting
+_RATE_LIMIT_LIMIT_HEADER = "X-RateLimit-Limit"
+_RATE_LIMIT_REMAINING_HEADER = "X-RateLimit-Remaining"
+_RATE_LIMIT_RESET_HEADER = "X-RateLimit-Reset"
+
 # Hard ceiling for --all crawls: page_size 100 x 1000 pages = 100_000 items.
 # Truncation must warn; never report the truncated length as the API total.
 _MAX_PAGES = 1000
@@ -49,6 +59,50 @@ def _retry_after_seconds(response: httpx.Response) -> int | None:
     except (TypeError, ValueError):
         return None
     return seconds if seconds >= 0 else None
+
+
+def _bucket_is_empty(response: httpx.Response) -> bool:
+    """Whether X-RateLimit-Remaining says the next request would be rejected."""
+    raw = response.headers.get(_RATE_LIMIT_REMAINING_HEADER)
+    if raw is None:
+        return False
+    try:
+        return int(raw.strip()) <= 0
+    except (TypeError, ValueError):
+        return False
+
+
+def _seconds_until_reset(response: httpx.Response) -> int | None:
+    """Whole seconds until X-RateLimit-Reset (a Unix timestamp), or None if absent, unusable or already past."""
+    raw = response.headers.get(_RATE_LIMIT_RESET_HEADER)
+    if raw is None:
+        return None
+    try:
+        reset_at = int(raw.strip())
+    except (TypeError, ValueError):
+        return None
+    wait = math.ceil(reset_at - time.time())
+    return wait if wait > 0 else None
+
+
+def _seconds_until_next_token(response: httpx.Response) -> int | None:
+    """
+    Whole seconds until one more request is admitted, or None if the headers do not say.
+
+    Reset is when the bucket is full again and Limit is its size, so a single
+    token is back after that span divided by the limit. Without a usable Limit
+    the only safe wait is the full reset.
+    """
+    until_full = _seconds_until_reset(response)
+    if until_full is None:
+        return None
+    try:
+        limit = int(response.headers.get(_RATE_LIMIT_LIMIT_HEADER, "").strip())
+    except ValueError:
+        return until_full
+    if limit <= 0:
+        return until_full
+    return math.ceil(until_full / limit)
 
 
 def _is_retryable(response: httpx.Response) -> bool:
@@ -180,10 +234,13 @@ class DualEntryClient:
             headers = dict(kwargs.pop("headers", None) or {})
             headers.setdefault(_IDEMPOTENCY_HEADER, str(uuid.uuid4()))
             kwargs["headers"] = headers
+        response = self._send(method, path, **kwargs)
+        return self._handle_response(response, sent_idempotency_key=keyed)
 
+    def _send(self, method: str, path: str, **kwargs) -> httpx.Response:
+        """Send one logical request, applying --retry if enabled, and return the last response."""
         if not self._retry:
-            response = self._client.request(method, path, **kwargs)
-            return self._handle_response(response, sent_idempotency_key=keyed)
+            return self._client.request(method, path, **kwargs)
 
         # Retry logic with visible feedback
         for attempt, backoff in enumerate(_RETRY_DELAYS):
@@ -191,10 +248,10 @@ class DualEntryClient:
             try:
                 response = self._client.request(method, path, **kwargs)
                 if not _is_retryable(response):
-                    return self._handle_response(response, sent_idempotency_key=keyed)
+                    return response
                 retry_after = _retry_after_seconds(response)
                 if retry_after is not None and retry_after > _MAX_RETRY_AFTER:
-                    return self._handle_response(response, sent_idempotency_key=keyed)
+                    return response
             except _RETRYABLE_EXCEPTIONS:
                 pass
 
@@ -204,8 +261,34 @@ class DualEntryClient:
             time.sleep(delay)
 
         # Final attempt
-        response = self._client.request(method, path, **kwargs)
-        return self._handle_response(response, sent_idempotency_key=keyed)
+        return self._client.request(method, path, **kwargs)
+
+    def _fetch_page(self, path: str, params: dict[str, Any]) -> httpx.Response:
+        """
+        Fetch one page of a crawl, pausing on 429 instead of failing.
+
+        A GET is safe to repeat and the pages before it are already in hand, so
+        a throttled page is waited out and asked for again. This runs whether
+        or not --retry is set. The wait comes from Retry-After, then from the
+        bucket reset time, then from the backoff table; past the ceiling, or
+        once the table runs out, the 429 is reported like any other error.
+        """
+        for backoff in _RETRY_DELAYS:
+            response = self._send("GET", path, params=params)
+            if response.status_code != 429:
+                return response
+            wait = _retry_after_seconds(response)
+            if wait is None:
+                wait = _seconds_until_reset(response)
+            if wait is not None and wait > _MAX_RETRY_AFTER:
+                return response
+            self._pause(wait if wait is not None else backoff)
+        return self._send("GET", path, params=params)
+
+    @staticmethod
+    def _pause(seconds: int) -> None:
+        typer.secho(f"Rate limit reached; pausing {seconds}s before the next page...", fg=typer.colors.YELLOW, err=True)
+        time.sleep(seconds)
 
     def get(self, path: str, params: dict[str, Any] | None = None) -> dict:
         return self._request("GET", path, params=params)
@@ -233,7 +316,8 @@ class DualEntryClient:
         total = 0
 
         for _ in range(_MAX_PAGES):
-            data = self.get(path, params=params)
+            response = self._fetch_page(path, params)
+            data = self._handle_response(response)
             items = data.get("items", [])
             all_items.extend(items)
             total = data.get("count", start_offset + len(all_items))
@@ -243,6 +327,12 @@ class DualEntryClient:
             if start_offset + len(all_items) >= total or not items:
                 break
             params["offset"] += page_size
+            # Another page follows: if this one emptied the bucket, wait for a token
+            # rather than spend a request on a 429.
+            if _bucket_is_empty(response):
+                wait = _seconds_until_next_token(response)
+                if wait is not None:
+                    self._pause(min(wait, _MAX_RETRY_AFTER))
 
         result: dict[str, Any] = {"items": all_items, "count": total}
         if start_offset + len(all_items) < total:

@@ -563,3 +563,230 @@ class TestPaginate:
         assert data["items"] == [{"id": 1}, {"id": 2}]
         assert data["count"] == 9
         assert data["next_offset"] == 2
+
+
+class TestPaginateRateLimits:
+    """
+    A --all crawl must respect the per-route token bucket instead of dying on it.
+
+    https://docs.dualentry.com/developers/guides/rate-limiting
+    https://docs.dualentry.com/developers/guides/pagination
+    """
+
+    BASE = "https://api.dualentry.com/public/v2"
+    NOW = 1_000_000.0
+
+    @pytest.fixture
+    def sleeps(self, monkeypatch):
+        """Record what the client would sleep and pin the clock, without actually sleeping."""
+        recorded = []
+        monkeypatch.setattr("dualentry_cli.client.time", SimpleNamespace(sleep=recorded.append, time=lambda: self.NOW))
+        return recorded
+
+    @staticmethod
+    def _client():
+        from dualentry_cli.client import DualEntryClient
+
+        # retry=False on purpose: a crawl must survive throttling without the global flag.
+        return DualEntryClient(api_url="https://api.dualentry.com", api_key="test_key", retry=False)
+
+    @staticmethod
+    def _offsets(route) -> list[str]:
+        return [c.request.url.params.get("offset", "0") for c in route.calls]
+
+    @respx.mock
+    def test_remaining_zero_waits_for_one_token_before_the_next_page(self, sleeps):
+        """
+        The guide asks clients to slow down preemptively. Reset is when the bucket is full
+        again and Limit is its size, so one token is back after Reset / Limit.
+        """
+        drained = {"X-RateLimit-Limit": "10", "X-RateLimit-Remaining": "0", "X-RateLimit-Reset": str(int(self.NOW) + 40)}
+        respx.get(f"{self.BASE}/invoices/").mock(
+            side_effect=[
+                httpx.Response(200, headers=drained, json={"items": [{"id": 1}, {"id": 2}], "count": 3}),
+                httpx.Response(200, json={"items": [{"id": 3}], "count": 3}),
+            ]
+        )
+
+        data = self._client().paginate("/invoices/", page_size=2)
+
+        assert data["items"] == [{"id": 1}, {"id": 2}, {"id": 3}]
+        assert sleeps == [4], "40s to refill 10 tokens is 4s per token"
+
+    @respx.mock
+    def test_remaining_zero_without_a_limit_waits_for_the_full_reset(self, sleeps):
+        drained = {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": str(int(self.NOW) + 4)}
+        respx.get(f"{self.BASE}/invoices/").mock(
+            side_effect=[
+                httpx.Response(200, headers=drained, json={"items": [{"id": 1}], "count": 2}),
+                httpx.Response(200, json={"items": [{"id": 2}], "count": 2}),
+            ]
+        )
+
+        self._client().paginate("/invoices/", page_size=1)
+
+        assert sleeps == [4], "no bucket size, so the only safe wait is the full refill"
+
+    @respx.mock
+    def test_remaining_above_zero_does_not_wait(self, sleeps):
+        headers = {"X-RateLimit-Remaining": "3", "X-RateLimit-Reset": str(int(self.NOW) + 9)}
+        respx.get(f"{self.BASE}/invoices/").mock(
+            side_effect=[
+                httpx.Response(200, headers=headers, json={"items": [{"id": 1}], "count": 2}),
+                httpx.Response(200, headers=headers, json={"items": [{"id": 2}], "count": 2}),
+            ]
+        )
+
+        self._client().paginate("/invoices/", page_size=1)
+
+        assert sleeps == []
+
+    @respx.mock
+    def test_missing_rate_limit_headers_behave_as_before(self, sleeps):
+        respx.get(f"{self.BASE}/invoices/").mock(
+            side_effect=[
+                httpx.Response(200, json={"items": [{"id": 1}], "count": 2}),
+                httpx.Response(200, json={"items": [{"id": 2}], "count": 2}),
+            ]
+        )
+
+        data = self._client().paginate("/invoices/", page_size=1)
+
+        assert len(data["items"]) == 2
+        assert sleeps == []
+
+    @respx.mock
+    def test_no_wait_after_the_last_page(self, sleeps):
+        """Nothing follows the final page, so an empty bucket there must not delay the result."""
+        drained = {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": str(int(self.NOW) + 5)}
+        respx.get(f"{self.BASE}/invoices/").mock(return_value=httpx.Response(200, headers=drained, json={"items": [{"id": 1}], "count": 1}))
+
+        self._client().paginate("/invoices/", page_size=1)
+
+        assert sleeps == []
+
+    @pytest.mark.parametrize("reset", ["soon", "", "2.5", str(int(NOW) - 30)])
+    @respx.mock
+    def test_unusable_or_past_reset_does_not_wait(self, sleeps, reset):
+        drained = {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": reset}
+        respx.get(f"{self.BASE}/invoices/").mock(
+            side_effect=[
+                httpx.Response(200, headers=drained, json={"items": [{"id": 1}], "count": 2}),
+                httpx.Response(200, json={"items": [{"id": 2}], "count": 2}),
+            ]
+        )
+
+        self._client().paginate("/invoices/", page_size=1)
+
+        assert sleeps == [], f"reset {reset!r} gives nothing to wait for"
+
+    @respx.mock
+    def test_preemptive_wait_is_capped_at_the_ceiling(self, sleeps):
+        from dualentry_cli.client import _MAX_RETRY_AFTER
+
+        drained = {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": str(int(self.NOW) + 3600)}
+        respx.get(f"{self.BASE}/invoices/").mock(
+            side_effect=[
+                httpx.Response(200, headers=drained, json={"items": [{"id": 1}], "count": 2}),
+                httpx.Response(200, json={"items": [{"id": 2}], "count": 2}),
+            ]
+        )
+
+        self._client().paginate("/invoices/", page_size=1)
+
+        assert sleeps == [_MAX_RETRY_AFTER], "never sleep an hour on a header; let the server say 429 if it must"
+
+    @respx.mock
+    def test_throttled_page_is_refetched_after_retry_after_without_the_retry_flag(self, sleeps):
+        """A GET is safe to repeat and earlier pages are in hand, so a 429 pauses the crawl instead of ending it."""
+        route = respx.get(f"{self.BASE}/invoices/").mock(
+            side_effect=[
+                httpx.Response(200, json={"items": [{"id": 1}, {"id": 2}], "count": 3}),
+                httpx.Response(429, headers={"Retry-After": "3"}, json={"errors": {"__all__": ["slow down"]}}),
+                httpx.Response(200, json={"items": [{"id": 3}], "count": 3}),
+            ]
+        )
+
+        data = self._client().paginate("/invoices/", page_size=2)
+
+        assert data["items"] == [{"id": 1}, {"id": 2}, {"id": 3}]
+        assert "next_offset" not in data
+        assert sleeps == [3]
+        assert self._offsets(route) == ["0", "2", "2"], "the throttled page is asked for again, not skipped"
+
+    @respx.mock
+    def test_throttled_page_without_retry_after_waits_for_the_reset(self, sleeps):
+        headers = {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": str(int(self.NOW) + 6)}
+        respx.get(f"{self.BASE}/invoices/").mock(
+            side_effect=[
+                httpx.Response(429, headers=headers, json={}),
+                httpx.Response(200, json={"items": [{"id": 1}], "count": 1}),
+            ]
+        )
+
+        data = self._client().paginate("/invoices/", page_size=1)
+
+        assert data["items"] == [{"id": 1}]
+        assert sleeps == [6]
+
+    @respx.mock
+    def test_throttled_page_with_no_headers_backs_off_then_gives_up(self, sleeps):
+        """Without any timing from the server, use the backoff table, and stop when it runs out."""
+        from dualentry_cli.client import _RETRY_DELAYS, APIError
+
+        route = respx.get(f"{self.BASE}/invoices/").mock(return_value=httpx.Response(429, json={}))
+
+        with pytest.raises(APIError) as exc:
+            self._client().paginate("/invoices/", page_size=1)
+
+        assert exc.value.status_code == 429
+        assert sleeps == _RETRY_DELAYS
+        assert route.call_count == len(_RETRY_DELAYS) + 1
+
+    @respx.mock
+    def test_throttled_page_beyond_the_ceiling_is_reported_not_slept_through(self, sleeps):
+        from dualentry_cli.client import APIError
+
+        route = respx.get(f"{self.BASE}/invoices/").mock(return_value=httpx.Response(429, headers={"Retry-After": "3600"}, json={}))
+
+        with pytest.raises(APIError) as exc:
+            self._client().paginate("/invoices/", page_size=1)
+
+        assert route.call_count == 1
+        assert sleeps == []
+        assert "3600" in exc.value.detail
+
+    @respx.mock
+    def test_other_errors_mid_crawl_still_raise_at_once(self, sleeps):
+        from dualentry_cli.client import APIError
+
+        route = respx.get(f"{self.BASE}/invoices/").mock(
+            side_effect=[
+                httpx.Response(200, json={"items": [{"id": 1}], "count": 2}),
+                httpx.Response(500, json={}),
+            ]
+        )
+
+        with pytest.raises(APIError) as exc:
+            self._client().paginate("/invoices/", page_size=1)
+
+        assert exc.value.status_code == 500
+        assert route.call_count == 2
+        assert sleeps == []
+
+    @pytest.mark.usefixtures("sleeps")
+    @respx.mock
+    def test_pause_is_announced_on_stderr(self, capsys):
+        respx.get(f"{self.BASE}/invoices/").mock(
+            side_effect=[
+                httpx.Response(429, headers={"Retry-After": "2"}, json={}),
+                httpx.Response(200, json={"items": [{"id": 1}], "count": 1}),
+            ]
+        )
+
+        self._client().paginate("/invoices/", page_size=1)
+
+        captured = capsys.readouterr()
+        assert captured.out == "", "stdout is reserved for the data"
+        assert "Rate limit reached" in captured.err
+        assert "pausing 2s" in captured.err
