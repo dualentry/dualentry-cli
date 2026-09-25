@@ -8,6 +8,7 @@ from dualentry_cli.auth import clear_credentials, load_api_key, run_login_flow, 
 from dualentry_cli.cli import HelpfulGroup
 from dualentry_cli.commands import make_resource_app
 from dualentry_cli.commands.accounts import app as accounts_app
+from dualentry_cli.commands.bank_connections import app as bank_connections_app
 from dualentry_cli.commands.bank_match import app as bank_match_app
 from dualentry_cli.commands.ije_extras import IJE_CHECKS, IJE_ONLINE_EXTRA_CHECKS, IJE_TEMPLATE
 from dualentry_cli.config import Config
@@ -107,6 +108,7 @@ app.add_typer(
 app.add_typer(make_resource_app("paper checks", "paper-check", "paper-checks", has_create=False, has_update=False, filters=TXN_ALL_PARTIES), name="paper-checks")
 app.add_typer(make_resource_app("inbox items", "inbox-item", "inbox", has_get=False, has_create=False, has_update=False, filters={"search"}), name="inbox")
 app.add_typer(bank_match_app, name="bank-match")
+app.add_typer(bank_connections_app, name="bank-connections")
 
 
 def version_callback(value: bool):

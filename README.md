@@ -82,8 +82,9 @@ dualentry bills list --status posted --format json
 | **Master Data** | Customers, Vendors, Items, Accounts, Classifications |
 | **Automation** | Recurring Invoices, Recurring Bills, Workflows, Contracts |
 | **Close Management** | Bank Match |
+| **Bank Feeds** | Bank Connections |
 
-All resources support `list`, `get`, `create`, and `update` operations.
+Most resources support `list`, `get`, `create`, and `update`; some (e.g. Bank Connections, Bank Match) expose a different verb set — see `--help`.
 
 ## Output Formats
 
