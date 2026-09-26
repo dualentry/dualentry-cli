@@ -57,6 +57,22 @@ dualentry invoices list
 dualentry invoices create --file invoice.json
 ```
 
+### Quote, submit, and send
+
+Quotes need the CPQ subscription. On recurring lines, `rate` is the price per billing period.
+
+```bash
+dualentry quotes template --output quote.json      # edit it, then:
+dualentry quotes create --file quote.json          # "draft" saves; "posted" submits for approval
+dualentry quotes update 12 --display-options '{"headline_total": "annual", "year_by_year": true}'
+dualentry quotes submit 12
+dualentry quotes list --approval-status approved
+dualentry quotes get QT-45                         # lines, recipients, totals (MRR, ARR, TCV, per year)
+dualentry quotes send 12 --pdf quote-12.pdf        # or --no-pdf
+```
+
+Approvers approve or reject quotes in DualEntry. The API does not render quote PDFs, so `send` attaches a PDF you downloaded from DualEntry, or sends without one.
+
 ### Export transactions for a date range
 
 ```bash
@@ -76,7 +92,7 @@ dualentry bills list --status posted --format json
 
 | Category | Resources |
 |----------|-----------|
-| **Receivables** | Invoices, Sales Orders, Customer Payments, Credits, Deposits |
+| **Receivables** | Quotes, Invoices, Sales Orders, Customer Payments, Credits, Deposits |
 | **Payables** | Bills, Purchase Orders, Vendor Payments, Credits, Refunds |
 | **Accounting** | Journal Entries, Bank Transfers, Fixed Assets, Depreciation |
 | **Master Data** | Customers, Vendors, Items, Accounts, Classifications |

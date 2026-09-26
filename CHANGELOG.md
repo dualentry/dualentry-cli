@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+- Added `dualentry quotes` for CPQ quotes: `list` (search, status, approval status, company, customer, valid-until range, ordering), `get` by number or `QT-` ID, `create`, `update` (partial, with `--display-options`), `submit`, `send` (with `--pdf` or `--no-pdf`), and `template`.
+- `quotes get` shows lines with billing frequency and service period, totals (one-time, recurring per cadence, MRR, ARR, first invoice, TCV or Ongoing, per year), and the signing order.
+
 ## [0.1.18] - 2026-09-01
 
 
