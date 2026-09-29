@@ -10,7 +10,7 @@ Usage:
 
 This script:
 1. Bumps version in pyproject.toml and __init__.py
-2. Updates CHANGELOG.md with today's date
+2. Promotes the CHANGELOG.md Unreleased section to the new version
 3. Commits the changes
 4. Creates a git tag
 5. Pushes to GitHub
@@ -29,6 +29,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PYPROJECT = ROOT / "pyproject.toml"
 INIT_FILE = ROOT / "src" / "dualentry_cli" / "__init__.py"
 CHANGELOG = ROOT / "CHANGELOG.md"
+UNRELEASED = "## [Unreleased]"
 
 
 def get_current_version() -> str:
@@ -78,25 +79,28 @@ def update_init(new_version: str) -> None:
     INIT_FILE.write_text(content)
 
 
-def update_changelog(new_version: str) -> None:
-    """Add new version entry to CHANGELOG.md if not already present."""
-    content = CHANGELOG.read_text()
-    today = datetime.now(UTC).strftime("%Y-%m-%d")
-    new_entry = f"## [{new_version}] - {today}\n\n"
+def promote_unreleased(content: str, new_version: str, today: str) -> tuple[str, str]:
+    """Move the Unreleased section under a new version heading; return (content, notes)."""
+    heading = f"## [{new_version}] - {today}"
 
-    # Check if this version is already in the changelog
     if f"## [{new_version}]" in content:
-        # Just update the date
-        content = re.sub(
-            rf"## \[{re.escape(new_version)}\] - \d{{4}}-\d{{2}}-\d{{2}}",
-            f"## [{new_version}] - {today}",
-            content,
-        )
+        content = re.sub(rf"## \[{re.escape(new_version)}\] - \d{{4}}-\d{{2}}-\d{{2}}", heading, content)
+    elif UNRELEASED in content:
+        # Keep an empty Unreleased section on top for the next PR.
+        content = content.replace(UNRELEASED, f"{UNRELEASED}\n\n{heading}", 1)
     else:
-        # Add new entry after "# Changelog"
-        content = content.replace("# Changelog\n", f"# Changelog\n\n{new_entry}")
+        content = content.replace("# Changelog\n", f"# Changelog\n\n{UNRELEASED}\n\n{heading}\n", 1)
 
+    notes = content.split(heading, 1)[1].split("\n## [", 1)[0].strip()
+    return content, notes
+
+
+def update_changelog(new_version: str) -> str:
+    """Promote Unreleased entries in CHANGELOG.md to new_version and return them."""
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
+    content, notes = promote_unreleased(CHANGELOG.read_text(), new_version, today)
     CHANGELOG.write_text(content)
+    return notes
 
 
 def run(cmd: list[str], check: bool = True) -> subprocess.CompletedProcess:
@@ -160,7 +164,7 @@ def main() -> int:
     print("\n  Updating version files...")
     update_pyproject(new_version)
     update_init(new_version)
-    update_changelog(new_version)
+    notes = update_changelog(new_version)
 
     # Commit
     print("\n  Committing changes...")
@@ -178,10 +182,11 @@ def main() -> int:
 
     # Create GitHub release
     print("\n  Creating GitHub release...")
-    result = run(
-        ["gh", "release", "create", f"v{new_version}", "--title", f"v{new_version}", "--generate-notes"],
-        check=False,
-    )
+    cmd = ["gh", "release", "create", f"v{new_version}", "--title", f"v{new_version}", "--generate-notes"]
+    if notes:
+        # gh places --notes above the generated PR list.
+        cmd += ["--notes", notes]
+    result = run(cmd, check=False)
     if result.returncode != 0:
         print(f"  WARNING: Could not create GitHub release: {result.stderr}")
         print("  Create it manually at: https://github.com/dualentry/dualentry-cli/releases/new")

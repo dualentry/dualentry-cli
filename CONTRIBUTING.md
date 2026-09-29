@@ -51,20 +51,19 @@ uv run pytest --cov=dualentry_cli --cov-report=term-missing
 1. Create a branch from `main`
 2. Make your changes
 3. Ensure linting and tests pass
-4. If you touched dependencies, run `uv lock` and commit `uv.lock`
-5. Open a PR against `main`
+4. For user-facing changes, add a bullet under `## [Unreleased]` in `CHANGELOG.md`
+5. If you touched dependencies, run `uv lock` and commit `uv.lock`
+6. Open a PR against `main`
 
 ## Releasing
 
 Releases are triggered by publishing a GitHub Release. CI builds binaries and updates the Homebrew tap automatically.
 
-1. Update `CHANGELOG.md` with the new version and changes
-2. Commit and push to `main`
-3. Go to GitHub → Releases → **Draft a new release**
-4. Click **Choose a tag** → type the new version (e.g., `v0.2.0`) → **Create new tag**
-5. Set the title: `DualEntry CLI v0.2.0 — <summary>`
-6. Paste the changelog entry as the release body
-7. Click **Publish release**
+Run `python scripts/release.py patch` (or `minor`, `major`, or an explicit version) from `main`. It:
+
+1. Moves the `## [Unreleased]` entries in `CHANGELOG.md` under the new version heading
+2. Bumps the version, commits, tags, and pushes
+3. Creates the GitHub Release with those entries above the auto-generated PR list
 
 CI will:
 - Build binaries for macOS (arm64, x86_64) and Linux (x86_64)
