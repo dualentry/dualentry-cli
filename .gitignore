@@ -8,3 +8,5 @@ build/
 *.spec
 .idea
 .tokensave
+.tokensave/*
+.env
