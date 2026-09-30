@@ -51,7 +51,7 @@ uv run pytest --cov=dualentry_cli --cov-report=term-missing
 1. Create a branch from `main`
 2. Make your changes
 3. Ensure linting and tests pass
-4. For user-facing changes, add a bullet under `## [Unreleased]` in `CHANGELOG.md`
+4. For user-facing changes, add a bullet under `## [Unreleased]` in `CHANGELOG.md`. CI fails PRs that touch `src/` without one; apply the `skip-changelog` label when the change isn't user-facing
 5. If you touched dependencies, run `uv lock` and commit `uv.lock`
 6. Open a PR against `main`
 
