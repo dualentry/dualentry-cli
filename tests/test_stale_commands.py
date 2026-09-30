@@ -32,6 +32,10 @@ def test_read_only_resource_keeps_its_read_commands(resource: str):
     assert _commands(resource) == {"list", "get"}
 
 
+def test_vat_rates_is_read_only():
+    assert _commands("vat-rates") == {"list", "get"}
+
+
 def test_inbox_keeps_only_list():
     assert _commands("inbox") == {"list"}
 

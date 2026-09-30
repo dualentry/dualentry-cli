@@ -34,6 +34,7 @@ _RECORD_PREFIX: dict[str, str] = {
     "intercompany-journal-entry": "IJE",
     "bank-transfer": "BT",
     "fixed-asset": "FA",
+    "statistical-journal": "SJ",
 }
 
 
@@ -1190,6 +1191,179 @@ def _workflow_detail(r):
 
 
 _register("workflow", _workflow_list, _workflow_detail)
+
+
+# ── Custom field ─────────────────────────────────────────────────────
+
+
+def _custom_field_list(items):
+    table = Table(title="Custom Fields", show_lines=False)
+    table.add_column("ID", style="dim", justify="right")
+    table.add_column("Name", min_width=20, style="bold")
+    table.add_column("Type")
+    table.add_column("Active")
+
+    for r in items:
+        table.add_row(
+            str(r.get("id", "")),
+            r.get("name", "-"),
+            str(r.get("field_type", "-")),
+            "yes" if r.get("is_active") else "no",
+        )
+
+    console.print(table)
+
+
+def _custom_field_detail(r):
+    header = Text()
+    header.append("CUSTOM FIELD", style="bold")
+    header.append(f"  {r.get('name', '')}", style="bold cyan")
+    console.print(Panel(header, expand=False))
+
+    details = Table.grid(padding=(0, 2))
+    details.add_column(style="dim", min_width=16)
+    details.add_column()
+    details.add_row("ID:", str(r.get("id", "-")))
+    details.add_row("Name:", r.get("name", "-"))
+    details.add_row("Type:", str(r.get("field_type", "-")))
+    details.add_row("Active:", "yes" if r.get("is_active") else "no")
+    console.print(details)
+
+
+_register("custom-field", _custom_field_list, _custom_field_detail)
+
+
+# ── Product tax code ─────────────────────────────────────────────────
+
+
+def _product_tax_code_list(items):
+    table = Table(title="Product Tax Codes", show_lines=False)
+    table.add_column("ID", style="dim", justify="right")
+    table.add_column("Code", style="bold")
+    table.add_column("Description", min_width=24)
+    table.add_column("Active")
+
+    for r in items:
+        table.add_row(
+            str(r.get("id", "")),
+            r.get("code", "-"),
+            (r.get("description") or "-")[:40],
+            "yes" if r.get("is_active") else "no",
+        )
+
+    console.print(table)
+
+
+def _product_tax_code_detail(r):
+    header = Text()
+    header.append("PRODUCT TAX CODE", style="bold")
+    header.append(f"  {r.get('code', '')}", style="bold cyan")
+    console.print(Panel(header, expand=False))
+
+    details = Table.grid(padding=(0, 2))
+    details.add_column(style="dim", min_width=16)
+    details.add_column()
+    details.add_row("ID:", str(r.get("id", "-")))
+    details.add_row("Code:", r.get("code", "-"))
+    details.add_row("Description:", r.get("description", "-"))
+    details.add_row("Source:", str(r.get("source", "-")))
+    details.add_row("Active:", "yes" if r.get("is_active") else "no")
+    console.print(details)
+
+
+_register("product-tax-code", _product_tax_code_list, _product_tax_code_detail)
+
+
+# ── VAT rate ─────────────────────────────────────────────────────────
+
+
+def _vat_rate_list(items):
+    table = Table(title="VAT Rates", show_lines=False)
+    table.add_column("ID", style="dim", justify="right")
+    table.add_column("Country")
+    table.add_column("Name", min_width=20, style="bold")
+    table.add_column("Rate", justify="right")
+    table.add_column("Active")
+
+    for r in items:
+        table.add_row(
+            str(r.get("id", "")),
+            r.get("country_code", "-"),
+            r.get("name", "-"),
+            str(r.get("rate", "-")),
+            "yes" if r.get("is_active") else "no",
+        )
+
+    console.print(table)
+
+
+def _vat_rate_detail(r):
+    header = Text()
+    header.append("VAT RATE", style="bold")
+    header.append(f"  {r.get('name', '')}", style="bold cyan")
+    console.print(Panel(header, expand=False))
+
+    details = Table.grid(padding=(0, 2))
+    details.add_column(style="dim", min_width=16)
+    details.add_column()
+    details.add_row("ID:", str(r.get("id", "-")))
+    details.add_row("Country:", r.get("country_code", "-"))
+    details.add_row("Name:", r.get("name", "-"))
+    details.add_row("Rate:", str(r.get("rate", "-")))
+    details.add_row("Type:", str(r.get("rate_type", "-")))
+    details.add_row("Tax type:", str(r.get("tax_type", "-")))
+    details.add_row("Valid from:", str(r.get("valid_from", "-")))
+    details.add_row("Valid to:", str(r.get("valid_to", "-")))
+    console.print(details)
+
+
+_register("vat-rate", _vat_rate_list, _vat_rate_detail)
+
+
+# ── Statistical journal ──────────────────────────────────────────────
+
+
+def _statistical_journal_list(items):
+    table = Table(title="Statistical Journals", show_lines=False)
+    table.add_column("#", style="dim", justify="right")
+    table.add_column("Date")
+    table.add_column("Period")
+    table.add_column("Account")
+    table.add_column("Status")
+    table.add_column("Memo", min_width=20)
+
+    for r in items:
+        table.add_row(
+            _fmt_id(r.get("number"), "statistical-journal"),
+            str(r.get("date", "-")),
+            str(r.get("period", "-")),
+            r.get("account_number", "-"),
+            _status_badge(r.get("record_status", "")),
+            (r.get("memo") or "-")[:40],
+        )
+
+    console.print(table)
+
+
+def _statistical_journal_detail(r):
+    header = Text()
+    header.append("STATISTICAL JOURNAL", style="bold")
+    header.append(f"  {_fmt_id(r.get('number'), 'statistical-journal')}", style="bold cyan")
+    console.print(Panel(header, expand=False))
+
+    details = Table.grid(padding=(0, 2))
+    details.add_column(style="dim", min_width=16)
+    details.add_column()
+    details.add_row("Number:", _fmt_id(r.get("number"), "statistical-journal"))
+    details.add_row("Date:", str(r.get("date", "-")))
+    details.add_row("Period:", str(r.get("period", "-")))
+    details.add_row("Status:", _status_badge(r.get("record_status", "")))
+    details.add_row("Account:", f"{r.get('account_number', '-')} {r.get('account_name', '')}".strip())
+    details.add_row("Memo:", r.get("memo", "-"))
+    console.print(details)
+
+
+_register("statistical-journal", _statistical_journal_list, _statistical_journal_detail)
 
 
 # ── Export jobs (destination data refresh) ───────────────────────────

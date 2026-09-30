@@ -71,6 +71,7 @@ NUMBERED_RESOURCES = [
     ("journal-entries", ["number", "date", "currency_iso_4217_code"]),
     ("bank-transfers", ["number", "date"]),
     ("fixed-assets", ["number", "name"]),
+    ("statistical-journals", ["number", "date"]),
 ]
 
 
@@ -126,6 +127,9 @@ ID_RESOURCES = [
     ("contracts", "id", ["id", "name"]),
     ("budgets", "id", ["id", "name"]),
     ("workflows", "id", ["id", "name"]),
+    ("custom-fields", "id", ["id", "name"]),
+    ("product-tax-codes", "id", ["id", "code"]),
+    ("vat-rates", "id", ["id", "name"]),
 ]
 
 
