@@ -1366,6 +1366,63 @@ def _statistical_journal_detail(r):
 _register("statistical-journal", _statistical_journal_list, _statistical_journal_detail)
 
 
+# ── Export jobs (destination data refresh) ───────────────────────────
+
+
+def _export_job_status_style(status: str | None) -> str:
+    return {
+        "pending": "yellow",
+        "running": "cyan",
+        "completed": "green",
+        "failed": "red",
+    }.get(status or "", "white")
+
+
+def _export_job_list(items: list[dict]) -> None:
+    table = Table(title="Export Jobs", show_header=True, header_style="bold")
+    table.add_column("ID", style="cyan")
+    table.add_column("Status")
+    table.add_column("Integration")
+    table.add_column("Created")
+    table.add_column("Started")
+    table.add_column("Completed")
+    for item in items:
+        status = item.get("status") or "-"
+        table.add_row(
+            str(item.get("id", "-")),
+            Text(str(status), style=_export_job_status_style(status if isinstance(status, str) else None)),
+            str(item.get("integration_id") or "-"),
+            str(item.get("created_at") or "-")[:19],
+            str(item.get("started_at") or "-")[:19],
+            str(item.get("completed_at") or "-")[:19],
+        )
+    console.print(table)
+
+
+def _export_job_detail(r: dict) -> None:
+    status = r.get("status") or "-"
+    header = Text()
+    header.append("Export Job ", style="bold")
+    header.append(str(r.get("id", "-")), style="bold cyan")
+    header.append("  ")
+    header.append(str(status), style=_export_job_status_style(status if isinstance(status, str) else None))
+    console.print(Panel(header, expand=False))
+
+    details = Table(show_header=False, box=None, padding=(0, 1))
+    details.add_column(style="dim", min_width=16)
+    details.add_column()
+    details.add_row("Integration:", str(r.get("integration_id") or "-"))
+    details.add_row("Created:", str(r.get("created_at") or "-"))
+    details.add_row("Started:", str(r.get("started_at") or "-"))
+    details.add_row("Completed:", str(r.get("completed_at") or "-"))
+    if r.get("error"):
+        details.add_row("Error:", Text(str(r["error"]), style="red"))
+    console.print(details)
+
+
+_register("export-job", _export_job_list, _export_job_detail)
+
+
 # ── Recurring records (use generic transaction pattern) ──────────────
 
 for _prefix in ("recurring-invoice", "recurring-bill", "recurring-journal-entry"):
