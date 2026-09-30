@@ -249,7 +249,15 @@ class DualEntryClient:
             result["next_offset"] = start_offset + len(all_items)
         return result
 
-    def post(self, path: str, json: dict[str, Any] | None = None) -> dict:
+    def post(
+        self,
+        path: str,
+        json: dict[str, Any] | None = None,
+        *,
+        files: list[tuple[str, tuple[str, bytes]]] | None = None,
+    ) -> dict:
+        if files is not None:
+            return self._request("POST", path, files=files)
         return self._request("POST", path, json=json)
 
     def put(self, path: str, json: dict[str, Any] | None = None) -> dict:

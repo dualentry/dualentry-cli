@@ -184,6 +184,68 @@ class TestErrorHandling:
         assert "not found" in result.output.lower() or "Error" in result.output
 
 
+class TestParityResourceCommands:
+    def test_product_tax_codes_crud_paths(self, mock_get_client):
+        mock_get_client.get.return_value = {"items": [], "count": 0}
+        result = runner.invoke(app, ["product-tax-codes", "list"])
+        assert result.exit_code == 0
+        mock_get_client.get.assert_called_with("/product-tax-codes/", params={"limit": 20, "offset": 0})
+
+    def test_custom_fields_delete(self, mock_get_client):
+        result = runner.invoke(app, ["custom-fields", "delete", "9"])
+        assert result.exit_code == 0
+        mock_get_client.delete.assert_called_once_with("/custom-fields/9/")
+
+    def test_vat_rates_read_only(self):
+        from dualentry_cli.main import app as cli_app
+
+        group = next(g for g in cli_app.registered_groups if g.name == "vat-rates")
+        commands = {c.name for c in group.typer_instance.registered_commands}
+        assert commands == {"list", "get"}
+
+    def test_statistical_journal_date_filters_use_api_names(self, mock_get_client):
+        mock_get_client.get.return_value = {"items": [], "count": 0}
+        result = runner.invoke(
+            app,
+            [
+                "statistical-journals",
+                "list",
+                "--date-start",
+                "2025-01-01",
+                "--date-end",
+                "2025-03-31",
+                "--period-start",
+                "2025-01-01",
+                "--period-end",
+                "2025-03-31",
+            ],
+        )
+        assert result.exit_code == 0
+        mock_get_client.get.assert_called_once_with(
+            "/statistical-journals/",
+            params={
+                "date_start": "2025-01-01",
+                "date_end": "2025-03-31",
+                "period_start": "2025-01-01",
+                "period_end": "2025-03-31",
+                "limit": 20,
+                "offset": 0,
+            },
+        )
+
+    def test_statistical_journal_add_attachments(self, mock_get_client, tmp_path):
+        mock_get_client.post.return_value = {"number": 1}
+        upload = tmp_path / "note.txt"
+        upload.write_text("hello")
+        result = runner.invoke(app, ["statistical-journals", "add-attachments", "3", "--file", str(upload)])
+        assert result.exit_code == 0
+        mock_get_client.post.assert_called_once()
+        args, kwargs = mock_get_client.post.call_args
+        assert args[0] == "/statistical-journals/3/attachments/"
+        assert kwargs["files"][0][0] == "files"
+        assert kwargs["files"][0][1][0] == "note.txt"
+
+
 class TestUnknownCommandSuggestions:
     """HelpfulGroup must catch typer's UsageError, not click's (see typer >= 0.26)."""
 
