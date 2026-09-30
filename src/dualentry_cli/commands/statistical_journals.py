@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Annotated
 
 import typer
 
@@ -14,78 +15,40 @@ from dualentry_cli.commands import (
     Offset,
     Search,
     Status,
-    _do_list,
     _load_json_file,
     _strip_record_prefix,
-    _supplied,
 )
+from dualentry_cli.commands.actions import run_list
 from dualentry_cli.output import format_output
 
 app = typer.Typer(help="Manage statistical journals", no_args_is_help=True, cls=HelpfulGroup)
 
 
-def _csv_ints(value: str | None) -> list[int] | None:
-    if not value:
+def _parse_csv_ints(value: str) -> list[int] | None:
+    """Parse a comma-separated list of integers for list filters."""
+    raw = value.strip()
+    if not raw:
         return None
-    return [int(part.strip()) for part in value.split(",") if part.strip()]
+    result: list[int] = []
+    for part in raw.split(","):
+        token = part.strip()
+        if not token:
+            continue
+        try:
+            result.append(int(token))
+        except ValueError:
+            raise typer.BadParameter(f"expected comma-separated integers, got {token!r}") from None
+    return result or None
+
+
+def _csv_ints_option(flag: str, *, help: str) -> typer.Option:
+    return typer.Option(flag, parser=_parse_csv_ints, help=help)
 
 
 def _csv_strings(value: str | None) -> list[str] | None:
     if not value:
         return None
     return [part.strip() for part in value.split(",") if part.strip()]
-
-
-def _build_list_filters(
-    *,
-    search: str | None,
-    status: str | None,
-    company: str | None,
-    date_start: str | None,
-    date_end: str | None,
-    period_start: str | None,
-    period_end: str | None,
-    number: str | None,
-    account_id: str | None,
-    account_number: str | None,
-    line_account_id: str | None,
-    line_account_number: str | None,
-    updated_after: str | None,
-    updated_before: str | None,
-    ordering: str | None,
-) -> dict:
-    params: dict = {}
-    if search:
-        params["search"] = search
-    if status:
-        params["record_status"] = status
-    if company:
-        params["company_id"] = company
-    if date_start:
-        params["date_start"] = date_start
-    if date_end:
-        params["date_end"] = date_end
-    if period_start:
-        params["period_start"] = period_start
-    if period_end:
-        params["period_end"] = period_end
-    if number:
-        params["number"] = _csv_ints(number)
-    if account_id:
-        params["account_id"] = _csv_ints(account_id)
-    if account_number:
-        params["account_number"] = _csv_strings(account_number)
-    if line_account_id:
-        params["line_account_id"] = _csv_ints(line_account_id)
-    if line_account_number:
-        params["line_account_number"] = _csv_strings(line_account_number)
-    if updated_after:
-        params["updated_after"] = updated_after
-    if updated_before:
-        params["updated_before"] = updated_before
-    if ordering:
-        params["ordering"] = ordering
-    return params
 
 
 @app.command("list")
@@ -100,10 +63,19 @@ def list_cmd(
     date_end: str | None = typer.Option(None, "--date-end", help="Filter to journal date (YYYY-MM-DD)"),
     period_start: str | None = typer.Option(None, "--period-start", help="Filter from period start (YYYY-MM-DD)"),
     period_end: str | None = typer.Option(None, "--period-end", help="Filter to period end (YYYY-MM-DD)"),
-    number: str | None = typer.Option(None, "--number", help="Filter by record number(s), comma-separated"),
-    account_id: str | None = typer.Option(None, "--account-id", help="Filter by account ID(s), comma-separated"),
+    number: Annotated[
+        list[int] | None,
+        _csv_ints_option("--number", help="Filter by record number(s), comma-separated"),
+    ] = None,
+    account_id: Annotated[
+        list[int] | None,
+        _csv_ints_option("--account-id", help="Filter by account ID(s), comma-separated"),
+    ] = None,
     account_number: str | None = typer.Option(None, "--account-number", help="Filter by account number(s), comma-separated"),
-    line_account_id: str | None = typer.Option(None, "--line-account-id", help="Filter by line account ID(s), comma-separated"),
+    line_account_id: Annotated[
+        list[int] | None,
+        _csv_ints_option("--line-account-id", help="Filter by line account ID(s), comma-separated"),
+    ] = None,
     line_account_number: str | None = typer.Option(None, "--line-account-number", help="Filter by line account number(s), comma-separated"),
     updated_after: str | None = typer.Option(None, "--updated-after", help="Updated after timestamp (ISO 8601)"),
     updated_before: str | None = typer.Option(None, "--updated-before", help="Updated before timestamp (ISO 8601)"),
@@ -111,36 +83,28 @@ def list_cmd(
     output: str = Format,
 ):
     """List statistical journals."""
-    from dualentry_cli.main import get_client
-
-    client = get_client()
-    filters = _build_list_filters(
-        search=_supplied(search),
-        status=_supplied(status),
-        company=_supplied(company),
-        date_start=_supplied(date_start),
-        date_end=_supplied(date_end),
-        period_start=_supplied(period_start),
-        period_end=_supplied(period_end),
-        number=_supplied(number),
-        account_id=_supplied(account_id),
-        account_number=_supplied(account_number),
-        line_account_id=_supplied(line_account_id),
-        line_account_number=_supplied(line_account_number),
-        updated_after=_supplied(updated_after),
-        updated_before=_supplied(updated_before),
-        ordering=_supplied(ordering),
-    )
-    _do_list(
-        client,
+    run_list(
         "statistical-journals",
-        "statistical-journal",
+        resource="statistical-journal",
         limit=limit,
         offset=offset,
         all_pages=all_pages,
         output=output,
-        status_param="record_status",
-        **filters,
+        search=search,
+        status=status,
+        company_id=company or None,
+        date_start=date_start or None,
+        date_end=date_end or None,
+        period_start=period_start or None,
+        period_end=period_end or None,
+        number=number,
+        account_id=account_id,
+        account_number=_csv_strings(account_number),
+        line_account_id=line_account_id,
+        line_account_number=_csv_strings(line_account_number),
+        updated_after=updated_after or None,
+        updated_before=updated_before or None,
+        ordering=ordering or None,
     )
 
 

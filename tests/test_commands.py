@@ -245,6 +245,12 @@ class TestParityResourceCommands:
         assert kwargs["files"][0][0] == "files"
         assert kwargs["files"][0][1][0] == "note.txt"
 
+    def test_statistical_journal_list_rejects_non_integer_csv(self):
+        result = runner.invoke(app, ["statistical-journals", "list", "--number", "1,abc"])
+        assert result.exit_code == 2
+        assert "comma-separated integers" in result.output
+        assert "abc" in result.output
+
 
 class TestUnknownCommandSuggestions:
     """HelpfulGroup must catch typer's UsageError, not click's (see typer >= 0.26)."""
