@@ -11,6 +11,7 @@ from dualentry_cli.commands.accounts import app as accounts_app
 from dualentry_cli.commands.bank_connections import app as bank_connections_app
 from dualentry_cli.commands.bank_match import app as bank_match_app
 from dualentry_cli.commands.ije_extras import IJE_CHECKS, IJE_ONLINE_EXTRA_CHECKS, IJE_TEMPLATE
+from dualentry_cli.commands.quotes import app as quotes_app
 from dualentry_cli.config import Config
 
 app = typer.Typer(name="dualentry", help="DualEntry accounting CLI", no_args_is_help=True, cls=HelpfulGroup)
@@ -32,6 +33,7 @@ app.add_typer(make_resource_app("bills", "bill", "bills", has_number=True, filte
 app.add_typer(accounts_app, name="accounts")  # Accounts has custom filtering (no status/date filters)
 
 # Money-in
+app.add_typer(quotes_app, name="quotes")  # Quotes have their own filters and actions (submit, send)
 app.add_typer(make_resource_app("sales orders", "sales-order", "sales-orders", has_number=True, filters=TXN_CUSTOMER), name="sales-orders")
 app.add_typer(make_resource_app("customer payments", "customer-payment", "customer-payments", has_number=True, filters=TXN_CUSTOMER), name="customer-payments")
 app.add_typer(make_resource_app("customer credits", "customer-credit", "customer-credits", has_number=True, filters=TXN_CUSTOMER), name="customer-credits")

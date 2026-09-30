@@ -34,6 +34,7 @@ _RECORD_PREFIX: dict[str, str] = {
     "intercompany-journal-entry": "IJE",
     "bank-transfer": "BT",
     "fixed-asset": "FA",
+    "quote": "QT",
 }
 
 
@@ -765,6 +766,121 @@ def _fixed_asset_detail(r):
 
 
 _register("fixed-asset", _fixed_asset_list, _fixed_asset_detail)
+
+
+# ── Quote ────────────────────────────────────────────────────────────
+
+_APPROVAL_COLORS = {"draft": "yellow", "pending_approval": "cyan", "approved": "green", "rejected": "red"}
+_CADENCE_LABELS = {
+    "one_time": "One-time",
+    "daily": "Daily",
+    "weekly": "Weekly",
+    "monthly": "Monthly",
+    "quarterly": "Quarterly",
+    "semi_annually": "Semi-annually",
+    "annually": "Annually",
+}
+
+
+def _approval_badge(status: str | None) -> str:
+    if not status:
+        return "-"
+    color = _APPROVAL_COLORS.get(status, "white")
+    return f"[{color}]{status.replace('_', ' ')}[/{color}]"
+
+
+def _cadence(frequency: str | None, interval: int | None) -> str:
+    label = _CADENCE_LABELS.get(frequency or "", frequency or "-")
+    return f"{label} x{interval}" if interval and interval > 1 else label
+
+
+def _quote_list(items):
+    table = Table(title="Quotes", show_lines=False)
+    table.add_column("ID", style="dim")
+    table.add_column("#", style="bold", justify="right")
+    table.add_column("Customer", min_width=20)
+    table.add_column("Contract Start", justify="center")
+    table.add_column("Valid Until", justify="center")
+    table.add_column("Amount", justify="right", style="bold")
+    table.add_column("Approval")
+
+    for r in items:
+        table.add_row(
+            _fmt_id(r.get("id"), "quote"),
+            str(r.get("number", "-")),
+            r.get("customer_name") or r.get("name") or "-",
+            r.get("contract_start_date", "-"),
+            r.get("valid_until", "-"),
+            _money(r.get("amount"), r.get("currency_iso_4217_code", "")),
+            _approval_badge(r.get("approval_status")),
+        )
+
+    console.print(table)
+
+
+def _quote_detail(r):
+    currency = r.get("currency_iso_4217_code", "")
+    header = Text()
+    header.append("QUOTE", style="bold")
+    header.append(f"  #{r.get('number', '')}  {_fmt_id(r.get('id'), 'quote')}", style="bold cyan")
+    status = r.get("approval_status") or ""
+    header.append(f"  {status.replace('_', ' ').upper()}", style=_APPROVAL_COLORS.get(status, "white"))
+    if r.get("sent_at"):
+        header.append("  SENT", style="green")
+    console.print(Panel(header, expand=False))
+
+    end = {"after": f"after {r.get('number_of_months')} months ({r.get('contract_end_date')})", "date": r.get("contract_end_date"), "ongoing": "ongoing"}
+    details = Table.grid(padding=(0, 2))
+    details.add_column(style="dim", min_width=16)
+    details.add_column()
+    details.add_row("Customer:", r.get("customer_name") or r.get("name") or "-")
+    details.add_row("Company:", r.get("company_name", "-"))
+    details.add_row("Contract:", f"{r.get('contract_start_date', '-')} to {end.get(r.get('contract_end_type'), '-')}")
+    details.add_row("Valid Until:", r.get("valid_until", "-"))
+    if r.get("memo"):
+        details.add_row("Memo:", r["memo"])
+    console.print(details)
+
+    lines = Table(title="Lines", show_lines=False)
+    lines.add_column("Item", min_width=18)
+    lines.add_column("Billing")
+    lines.add_column("Service Period", justify="center")
+    lines.add_column("Qty", justify="right")
+    lines.add_column("Rate", justify="right")
+    lines.add_column("Line TCV", justify="right", style="bold")
+    for line in r.get("items") or []:
+        period = f"{line.get('billing_start_date') or '-'} to {line.get('billing_end_date') or 'ongoing'}"
+        item = line.get("item_name", "-") + (" (ramp)" if line.get("ramp_group_id") else "")
+        lines.add_row(
+            item,
+            _cadence(line.get("billing_frequency"), line.get("billing_interval")),
+            period,
+            _fmt_decimal(line.get("quantity")),
+            _money(line.get("rate"), currency),
+            _money(line.get("line_tcv"), currency) if line.get("line_tcv") is not None else "ongoing",
+        )
+    console.print(lines)
+
+    totals = r.get("totals") or {}
+    summary = Table.grid(padding=(0, 2))
+    summary.add_column(style="dim", min_width=16)
+    summary.add_column(justify="right")
+    summary.add_row("One-time:", _money((totals.get("one_time") or {}).get("total"), currency))
+    for bucket in totals.get("recurring") or []:
+        summary.add_row(f"{_cadence(bucket.get('billing_frequency'), bucket.get('billing_interval'))}:", _money(bucket.get("total"), currency))
+    summary.add_row("MRR / ARR:", f"{_money(totals.get('mrr'), currency)} / {_money(totals.get('arr'), currency)}")
+    summary.add_row("First Invoice:", _money(totals.get("first_invoice_amount"), currency))
+    summary.add_row("TCV:", _money(totals.get("tcv"), currency) if totals.get("tcv") is not None else "Ongoing")
+    for year in totals.get("years") or []:
+        summary.add_row(f"Year {year.get('year')}:", _money(year.get("total"), currency))
+    console.print(summary)
+
+    signers = sorted((p for p in r.get("recipients") or [] if p.get("signing_order")), key=lambda p: p["signing_order"])
+    if signers:
+        console.print("[dim]Signing order:[/dim] " + ", ".join(f"{p['signing_order']}. {p.get('name')} ({p.get('side')})" for p in signers))
+
+
+_register("quote", _quote_list, _quote_detail)
 
 
 # ── Customer ─────────────────────────────────────────────────────────
