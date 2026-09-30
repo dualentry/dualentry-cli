@@ -72,6 +72,16 @@ export X_API_KEY=your_api_key
 dualentry bills list --status posted --format json
 ```
 
+### Request a destination data export and wait for it
+
+```bash
+# Kick off an off-cycle Snowflake (or other destination) refresh
+dualentry export-jobs create --format json
+
+# Poll until completed or failed (exit 1 on failure / timeout)
+dualentry export-jobs wait 42 --interval 10 --timeout 1800
+```
+
 ## Available Resources
 
 | Category | Resources |
@@ -82,8 +92,11 @@ dualentry bills list --status posted --format json
 | **Master Data** | Customers, Vendors, Items, Accounts, Classifications |
 | **Automation** | Recurring Invoices, Recurring Bills, Workflows, Contracts |
 | **Close Management** | Bank Match |
+| **Bank Feeds** | Bank Connections |
+| **Developers** | Export Jobs (destination data refresh) |
 
-All resources support `list`, `get`, `create`, and `update` operations.
+Most resources support `list`, `get`, `create`, and `update`; some (e.g. Bank Connections, Bank Match) expose a different verb set — see `--help`.
+Export jobs support `create`, `list`, `get`, and `wait` (poll until finished).
 
 ## Output Formats
 

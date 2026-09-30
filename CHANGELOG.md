@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Add `export-jobs` commands (`create`, `list`, `get`, `wait`) for on-demand destination data refreshes via the public API
+
 ## [0.1.18] - 2026-09-01
 
 
