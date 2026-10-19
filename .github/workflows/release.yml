@@ -55,14 +55,14 @@ jobs:
             gh release upload "${{ github.event.release.tag_name }}" "$f" --repo "${{ github.repository }}"
           done
 
-  # GITHUB_TOKEN cannot write to dualentry/homebrew-tap. Mint an installation
-  # token from the dualentry-ci App instead of a user PAT (SRE-149).
+  # GITHUB_TOKEN cannot write to another repository. Use a GitHub App
+  # installation token to update the Homebrew tap.
   update-tap:
     needs: upload
     runs-on: ubuntu-latest
     permissions: {}
     steps:
-      - name: Create dualentry-ci App token
+      - name: Create GitHub App token
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
@@ -130,8 +130,8 @@ jobs:
           mkdir -p /tmp/tap/Formula
           cp /tmp/dualentry.rb /tmp/tap/Formula/dualentry.rb
           cd /tmp/tap
-          git config user.name "dualentry-ci[bot]"
-          git config user.email "dualentry-ci[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
           BRANCH="update-dualentry-$VERSION"
           git checkout -b "$BRANCH"
@@ -139,8 +139,7 @@ jobs:
           git commit -m "Update dualentry to $VERSION"
           git push origin "$BRANCH"
 
-          # main is a protected branch on the tap repo (PR required), so push a
-          # branch and PR it instead of pushing straight to main.
+          # Push a branch and open a PR; main may require review.
           PR_URL=$(gh pr create --repo dualentry/homebrew-tap \
             --title "Update dualentry to $VERSION" \
             --body "Automated formula update for dualentry $VERSION." \
@@ -154,3 +153,4 @@ jobs:
           else
             echo "::warning::Could not merge or enable auto-merge for $PR_URL — merge it manually."
           fi
+
