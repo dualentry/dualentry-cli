@@ -55,15 +55,30 @@ jobs:
             gh release upload "${{ github.event.release.tag_name }}" "$f" --repo "${{ github.repository }}"
           done
 
+  # GITHUB_TOKEN cannot write to dualentry/homebrew-tap. Mint an installation
+  # token from the dualentry-homebrew-tap App instead of a user PAT.
+  # Setup: Linear SRE-149. Pattern: github-actions PR assigner / aws-infra terraform-ci.
   update-tap:
     needs: upload
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
+      - name: Create Homebrew tap App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.HOMEBREW_TAP_APP_CLIENT_ID }}
+          private-key: ${{ secrets.HOMEBREW_TAP_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: homebrew-tap
+          permission-contents: write
+          permission-pull-requests: write
+
       - name: Update Homebrew tap
-        if: ${{ env.TAP_TOKEN != '' }}
         env:
-          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
+          set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
           BASE_URL="https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}"
 
@@ -112,12 +127,12 @@ jobs:
           sed -i "s|SHA_LINUX_PLACEHOLDER|$SHA_LINUX|g" /tmp/dualentry.rb
           sed -i 's/^          //' /tmp/dualentry.rb
 
-          git clone "https://x-access-token:${TAP_TOKEN}@github.com/dualentry/homebrew-tap.git" /tmp/tap
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/dualentry/homebrew-tap.git" /tmp/tap
           mkdir -p /tmp/tap/Formula
           cp /tmp/dualentry.rb /tmp/tap/Formula/dualentry.rb
           cd /tmp/tap
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "dualentry-homebrew-tap[bot]"
+          git config user.email "dualentry-homebrew-tap[bot]@users.noreply.github.com"
 
           BRANCH="update-dualentry-$VERSION"
           git checkout -b "$BRANCH"
@@ -127,7 +142,6 @@ jobs:
 
           # main is a protected branch on the tap repo (PR required), so push a
           # branch and PR it instead of pushing straight to main.
-          export GH_TOKEN="$TAP_TOKEN"
           PR_URL=$(gh pr create --repo dualentry/homebrew-tap \
             --title "Update dualentry to $VERSION" \
             --body "Automated formula update for dualentry $VERSION." \
