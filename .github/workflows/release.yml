@@ -56,19 +56,18 @@ jobs:
           done
 
   # GITHUB_TOKEN cannot write to dualentry/homebrew-tap. Mint an installation
-  # token from the dualentry-homebrew-tap App instead of a user PAT.
-  # Setup: Linear SRE-149. Pattern: github-actions PR assigner / aws-infra terraform-ci.
+  # token from the dualentry-ci App instead of a user PAT (SRE-149).
   update-tap:
     needs: upload
     runs-on: ubuntu-latest
     permissions: {}
     steps:
-      - name: Create Homebrew tap App token
+      - name: Create dualentry-ci App token
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          client-id: ${{ vars.HOMEBREW_TAP_APP_CLIENT_ID }}
-          private-key: ${{ secrets.HOMEBREW_TAP_APP_PRIVATE_KEY }}
+          client-id: ${{ vars.DUALENTRY_CI_APP_CLIENT_ID }}
+          private-key: ${{ secrets.DUALENTRY_CI_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: homebrew-tap
           permission-contents: write
@@ -131,8 +130,8 @@ jobs:
           mkdir -p /tmp/tap/Formula
           cp /tmp/dualentry.rb /tmp/tap/Formula/dualentry.rb
           cd /tmp/tap
-          git config user.name "dualentry-homebrew-tap[bot]"
-          git config user.email "dualentry-homebrew-tap[bot]@users.noreply.github.com"
+          git config user.name "dualentry-ci[bot]"
+          git config user.email "dualentry-ci[bot]@users.noreply.github.com"
 
           BRANCH="update-dualentry-$VERSION"
           git checkout -b "$BRANCH"
