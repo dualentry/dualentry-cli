@@ -55,15 +55,29 @@ jobs:
             gh release upload "${{ github.event.release.tag_name }}" "$f" --repo "${{ github.repository }}"
           done
 
+  # GITHUB_TOKEN cannot write to another repository. Use a GitHub App
+  # installation token to update the Homebrew tap.
   update-tap:
     needs: upload
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.DUALENTRY_CI_APP_CLIENT_ID }}
+          private-key: ${{ secrets.DUALENTRY_CI_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: homebrew-tap
+          permission-contents: write
+          permission-pull-requests: write
+
       - name: Update Homebrew tap
-        if: ${{ env.TAP_TOKEN != '' }}
         env:
-          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
+          set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
           BASE_URL="https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}"
 
@@ -112,7 +126,7 @@ jobs:
           sed -i "s|SHA_LINUX_PLACEHOLDER|$SHA_LINUX|g" /tmp/dualentry.rb
           sed -i 's/^          //' /tmp/dualentry.rb
 
-          git clone "https://x-access-token:${TAP_TOKEN}@github.com/dualentry/homebrew-tap.git" /tmp/tap
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/dualentry/homebrew-tap.git" /tmp/tap
           mkdir -p /tmp/tap/Formula
           cp /tmp/dualentry.rb /tmp/tap/Formula/dualentry.rb
           cd /tmp/tap
@@ -125,9 +139,7 @@ jobs:
           git commit -m "Update dualentry to $VERSION"
           git push origin "$BRANCH"
 
-          # main is a protected branch on the tap repo (PR required), so push a
-          # branch and PR it instead of pushing straight to main.
-          export GH_TOKEN="$TAP_TOKEN"
+          # Push a branch and open a PR; main may require review.
           PR_URL=$(gh pr create --repo dualentry/homebrew-tap \
             --title "Update dualentry to $VERSION" \
             --body "Automated formula update for dualentry $VERSION." \
@@ -141,3 +153,4 @@ jobs:
           else
             echo "::warning::Could not merge or enable auto-merge for $PR_URL — merge it manually."
           fi
+
