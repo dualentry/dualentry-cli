@@ -105,6 +105,8 @@ class TestTruncatedLinesWarning:
         }
         format_output(data, resource="invoice")
         captured = capsys.readouterr()
+        assert "Quantity" in captured.out
+        assert "Qty" not in captured.out
         assert "Warning: showing 1 of 150 lines. The API caps inline lines at 100." in captured.out
 
     def test_json_keeps_flags_and_skips_warning(self, capsys):
