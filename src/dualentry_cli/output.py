@@ -232,7 +232,7 @@ def _transaction_detail(
         items_table = Table(show_lines=True, title="Line Items")
         items_table.add_column("#", justify="right", style="dim", width=4)
         items_table.add_column("Description", min_width=30)
-        items_table.add_column("Qty", justify="right", width=10)
+        items_table.add_column("Quantity", justify="right", width=12)
         items_table.add_column("Rate", justify="right", width=14)
         items_table.add_column("Amount", justify="right", width=14, style="bold")
 
