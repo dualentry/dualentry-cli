@@ -90,6 +90,7 @@ dualentry export-jobs wait 42 --interval 10 --timeout 1800
 | **Payables** | Bills, Purchase Orders, Vendor Payments, Credits, Refunds |
 | **Accounting** | Journal Entries, Bank Transfers, Fixed Assets, Depreciation |
 | **Master Data** | Customers, Vendors, Items, Accounts, Classifications |
+| **Tax** | VAT Rates, GST Tax Rates, Product Tax Codes |
 | **Automation** | Recurring Invoices, Recurring Bills, Workflows, Contracts |
 | **Close Management** | Bank Match |
 | **Bank Feeds** | Bank Connections |

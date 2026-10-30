@@ -11,10 +11,12 @@ Run:
 from __future__ import annotations
 
 import os
+from enum import StrEnum
 
 import pytest
 
 from dualentry_cli.client import DualEntryClient
+from dualentry_cli.commands.gst_tax_rates import GstCountry, GstTreatment
 from dualentry_cli.config import Config
 
 # ── Fixtures ────────────────────────────────────────────────────────
@@ -147,6 +149,25 @@ def test_id_resource_get(client: DualEntryClient, path: str, id_field: str, deta
 
     detail = client.get(f"/{path}/{record_id}/")
     assert_record(detail, detail_keys)
+
+
+# ── GST tax rates (list only: an org outside GST countries may have none) ──
+
+
+def test_gst_tax_rates_list(client: DualEntryClient):
+    data = client.get("/gst-tax-rates/", params={"limit": 2})
+    assert_list(data)
+    if data["items"]:
+        item = data["items"][0]
+        assert {"id", "country_code", "rate", "tax_treatment", "components"} <= item.keys()
+        assert isinstance(item["rate"], str)
+
+
+@pytest.mark.parametrize(("schema", "cli_enum"), [("GstCountries", GstCountry), ("GstTreatmentType", GstTreatment)])
+def test_gst_choices_match_the_api_schema(client: DualEntryClient, schema: str, cli_enum: type[StrEnum]):
+    """--country and --treatment hardcode the API's enums; fail when the API adds or drops a value."""
+    spec = client.get("/openapi.json")
+    assert set(spec["components"]["schemas"][schema]["enum"]) == {e.value for e in cli_enum}
 
 
 # ── Accounts (uses account number in URL) ───────────────────────────
