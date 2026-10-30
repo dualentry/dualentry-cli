@@ -89,7 +89,7 @@ dualentry export-jobs wait 42 --interval 10 --timeout 1800
 | **Receivables** | Invoices, Sales Orders, Customer Payments, Credits, Deposits |
 | **Payables** | Bills, Purchase Orders, Vendor Payments, Credits, Refunds |
 | **Accounting** | Journal Entries, Bank Transfers, Fixed Assets, Depreciation |
-| **Master Data** | Customers, Vendors, Items, Accounts, Classifications |
+| **Master Data** | Customers, Vendors, Items, Accounts, Classifications, Classification Lines |
 | **Automation** | Recurring Invoices, Recurring Bills, Workflows, Contracts |
 | **Close Management** | Bank Match |
 | **Bank Feeds** | Bank Connections |

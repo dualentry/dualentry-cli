@@ -10,6 +10,7 @@ from dualentry_cli.commands import make_resource_app
 from dualentry_cli.commands.accounts import app as accounts_app
 from dualentry_cli.commands.bank_connections import app as bank_connections_app
 from dualentry_cli.commands.bank_match import app as bank_match_app
+from dualentry_cli.commands.classifications_lines import app as classifications_lines_app
 from dualentry_cli.commands.export_jobs import app as export_jobs_app
 from dualentry_cli.commands.ije_extras import IJE_CHECKS, IJE_ONLINE_EXTRA_CHECKS, IJE_TEMPLATE
 from dualentry_cli.commands.statistical_journals import app as statistical_journals_app
@@ -74,6 +75,7 @@ app.add_typer(make_resource_app("vendors", "vendor", "vendors", filters=TXN), na
 app.add_typer(make_resource_app("items", "item", "items", filters={"search", "status"}), name="items")
 app.add_typer(make_resource_app("companies", "company", "companies", has_create=False, has_update=False, filters={"search"}), name="companies")
 app.add_typer(make_resource_app("classifications", "classification", "classifications", filters={"search"}), name="classifications")
+app.add_typer(classifications_lines_app, name="classifications-lines")  # List-only, with line-specific filters
 app.add_typer(make_resource_app("custom fields", "custom-field", "custom-fields", has_delete=True, filters={"search"}), name="custom-fields")
 app.add_typer(make_resource_app("product tax codes", "product-tax-code", "product-tax-codes", has_delete=True, filters={"search"}), name="product-tax-codes")
 app.add_typer(

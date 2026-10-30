@@ -149,6 +149,16 @@ def test_id_resource_get(client: DualEntryClient, path: str, id_field: str, deta
     assert_record(detail, detail_keys)
 
 
+# ── Classification lines (list-only) ────────────────────────────────
+
+
+def test_classifications_lines_list(client: DualEntryClient):
+    data = client.get("/classifications-lines/", params={"limit": 2})
+    assert_list(data)
+    if data["items"]:
+        assert {"id", "name", "classification_id", "classification_name"} <= data["items"][0].keys()
+
+
 # ── Accounts (uses account number in URL) ───────────────────────────
 
 
