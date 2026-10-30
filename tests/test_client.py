@@ -236,6 +236,60 @@ class TestIdempotencyKey:
         assert "Idempotency-Key" in route.calls[0].request.headers
 
 
+class TestMultipartUploads:
+    """
+    The API rejects an Idempotency-Key on non-JSON bodies, so uploads go unkeyed.
+
+    Without a key a retry could attach the files twice, so only a 429, which proves
+    the upload did not run, is retried.
+    """
+
+    BASE = "https://api.dualentry.com/public/v2"
+    FILES = [("files", ("receipt.txt", b"hello"))]
+
+    @pytest.fixture(autouse=True)
+    def no_backoff(self, monkeypatch):
+        monkeypatch.setattr("dualentry_cli.client._RETRY_DELAYS", [0, 0, 0])
+
+    @staticmethod
+    def _client():
+        from dualentry_cli.client import DualEntryClient
+
+        return DualEntryClient(api_url="https://api.dualentry.com", api_key="test_key", retry=True)
+
+    @respx.mock
+    def test_upload_sends_no_idempotency_key(self):
+        route = respx.post(f"{self.BASE}/invoices/3/attachments/").mock(return_value=httpx.Response(200, json={"number": 3}))
+        self._client().post("/invoices/3/attachments/", files=self.FILES)
+        request = route.calls[0].request
+        assert "Idempotency-Key" not in request.headers
+        assert request.headers["content-type"].startswith("multipart/form-data")
+
+    @respx.mock
+    def test_upload_is_retried_after_a_429(self):
+        route = respx.post(f"{self.BASE}/invoices/3/attachments/").mock(
+            side_effect=[httpx.Response(429, headers={"Retry-After": "0"}), httpx.Response(200, json={"number": 3})],
+        )
+        assert self._client().post("/invoices/3/attachments/", files=self.FILES) == {"number": 3}
+        assert route.call_count == 2
+
+    @respx.mock
+    def test_upload_is_not_retried_after_a_5xx(self):
+        from dualentry_cli.client import APIError
+
+        route = respx.post(f"{self.BASE}/invoices/3/attachments/").mock(return_value=httpx.Response(503))
+        with pytest.raises(APIError):
+            self._client().post("/invoices/3/attachments/", files=self.FILES)
+        assert route.call_count == 1
+
+    @respx.mock
+    def test_upload_is_not_retried_after_a_network_error(self):
+        route = respx.post(f"{self.BASE}/invoices/3/attachments/").mock(side_effect=httpx.ReadTimeout("slow"))
+        with pytest.raises(httpx.ReadTimeout):
+            self._client().post("/invoices/3/attachments/", files=self.FILES)
+        assert route.call_count == 1
+
+
 class TestRetryAfterAndConflicts:
     """
     Retry timing follows the server, and the two meanings of 409 are separated.

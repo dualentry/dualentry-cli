@@ -15,6 +15,7 @@ from dualentry_cli.commands import (
     Offset,
     Search,
     Status,
+    _add_attachment_commands,
     _load_json_file,
     _strip_record_prefix,
 )
@@ -150,17 +151,4 @@ def update_cmd(
     format_output(data, resource="statistical-journal", fmt=output)
 
 
-@app.command("add-attachments")
-def add_attachments_cmd(
-    number: str = typer.Argument(help="Record number of the journal"),
-    file: list[Path] = typer.Option(..., "--file", "-f", help="Attachment file(s) to upload", exists=True, readable=True),
-    output: str = Format,
-):
-    """Upload attachment file(s) to a statistical journal."""
-    from dualentry_cli.main import get_client
-
-    client = get_client()
-    stripped = _strip_record_prefix(number)
-    multipart = [("files", (path.name, path.read_bytes())) for path in file]
-    data = client.post(f"/statistical-journals/{stripped}/attachments/", files=multipart)
-    format_output(data, resource="statistical-journal", fmt=output)
+_add_attachment_commands(app, "statistical-journals", "statistical-journal", replace=False)

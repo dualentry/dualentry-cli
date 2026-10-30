@@ -6,7 +6,7 @@ import os
 import sys
 import time
 import uuid
-from typing import Any
+from typing import Any, TypeAlias
 
 import httpx
 
@@ -32,6 +32,10 @@ _IDEMPOTENCY_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 _RETRY_AFTER_HEADER = "Retry-After"
 
 _MAX_RETRY_AFTER = 60
+
+# One `("files", (filename, content))` part per upload. Bytes, not open files: a
+# retried request resends these parts, and a file handle would already be spent.
+Multipart: TypeAlias = list[tuple[str, tuple[str, bytes]]]
 
 # Hard ceiling for --all crawls: page_size 100 x 1000 pages = 100_000 items.
 # Truncation must warn; never report the truncated length as the API total.
@@ -173,7 +177,11 @@ class DualEntryClient:
 
     def _request(self, method: str, path: str, **kwargs) -> dict:
         method = method.upper()
-        keyed = method in _IDEMPOTENCY_METHODS
+        # The API rejects an Idempotency-Key on non-JSON bodies, so multipart uploads
+        # go unkeyed. Without a key, only a 429 proves the write did not run; a network
+        # error or 5xx may follow a completed upload, so those are not retried.
+        unkeyed_write = method in _IDEMPOTENCY_METHODS and "files" in kwargs
+        keyed = method in _IDEMPOTENCY_METHODS and not unkeyed_write
         if keyed:
             # One key per logical request, deliberately generated here rather than
             # per attempt: reusing it across retries is what makes a retry safe.
@@ -190,13 +198,15 @@ class DualEntryClient:
             retry_after = None
             try:
                 response = self._client.request(method, path, **kwargs)
-                if not _is_retryable(response):
+                retryable = response.status_code == 429 if unkeyed_write else _is_retryable(response)
+                if not retryable:
                     return self._handle_response(response, sent_idempotency_key=keyed)
                 retry_after = _retry_after_seconds(response)
                 if retry_after is not None and retry_after > _MAX_RETRY_AFTER:
                     return self._handle_response(response, sent_idempotency_key=keyed)
             except _RETRYABLE_EXCEPTIONS:
-                pass
+                if unkeyed_write:
+                    raise
 
             # every retry waits, including the one after the loop
             delay = retry_after if retry_after is not None else backoff
@@ -254,7 +264,7 @@ class DualEntryClient:
         path: str,
         json: dict[str, Any] | None = None,
         *,
-        files: list[tuple[str, tuple[str, bytes]]] | None = None,
+        files: Multipart | None = None,
     ) -> dict:
         if files is not None:
             return self._request("POST", path, files=files)

@@ -37,6 +37,10 @@ _RECORD_PREFIX: dict[str, str] = {
     "statistical-journal": "SJ",
 }
 
+# Resources whose prefixed display ID wraps the record number (SJ-3 is number 3).
+# Every other prefix wraps the internal ID, which record URLs do not accept.
+_NUMBER_PREFIXED: frozenset[str] = frozenset({"statistical-journal"})
+
 
 def _fmt_id(record_id, resource: str = "") -> str:
     """Format a record ID with its prefix, e.g. 135934 → IN-135934 (matches UI display)."""
@@ -58,6 +62,27 @@ def format_output(data: dict, resource: str = "generic", fmt: str = "human") -> 
         return
 
     _print_detail(data, resource)
+
+
+def _file_size(size: int) -> str:
+    for unit in ("B", "KiB"):
+        if size < 1024:
+            return f"{size:g} {unit}"
+        size /= 1024
+    return f"{size:.1f} MiB"
+
+
+def print_attachments(record: dict, *, label: str) -> None:
+    """Show a record's attachments after an upload, rather than the whole record."""
+    attachments = record.get("attachments") or []
+    table = Table(title=f"Attachments on {label}", show_lines=False)
+    table.add_column("ID", style="dim", justify="right")
+    table.add_column("File", style="bold")
+    table.add_column("Size", justify="right")
+    for a in attachments:
+        table.add_row(str(a.get("id", "-")), a.get("file_name") or "-", _file_size(a["file_size"]) if a.get("file_size") is not None else "-")
+    console.print(table)
+    console.print(f"{len(attachments)} attachment{'s' if len(attachments) != 1 else ''}")
 
 
 # ── Dispatcher ───────────────────────────────────────────────────────

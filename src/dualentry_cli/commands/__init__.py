@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import typer
 
 from dualentry_cli.cli import HelpfulGroup, make_list_command_cls
-from dualentry_cli.client import _MAX_PAGES
-from dualentry_cli.output import _RECORD_PREFIX, format_output
+from dualentry_cli.client import _MAX_PAGES, Multipart
+from dualentry_cli.output import _NUMBER_PREFIXED, _RECORD_PREFIX, format_output, print_attachments
 
 # Filter flags `list` can offer, with every option spelling each one accepts.
 FILTER_OPTIONS = {
@@ -175,6 +175,159 @@ def _strip_to_writable(data: dict) -> dict:
     return payload
 
 
+# ── Attachment helpers ─────────────────────────────────────────────
+
+# The API rejects empty files and files over 10 MiB, checking each file in turn and
+# storing the ones before it first. Checking every file up front fails before any
+# bytes are sent, so a bad last file can't leave the earlier ones half-uploaded.
+ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024
+_ATTACHMENT_MAX_LABEL = f"{ATTACHMENT_MAX_BYTES // 2**20} MiB"
+
+AttachmentFiles = typer.Option(
+    ...,
+    "--file",
+    "-f",
+    help=f"File to attach (max {_ATTACHMENT_MAX_LABEL}); repeat the flag for several",
+    exists=True,
+    dir_okay=False,
+    readable=True,
+)
+
+
+def _record_number_arg(value: str, resource: str) -> str:
+    """
+    Return the record number to put in an attachment URL.
+
+    Args:
+        value: What the user typed: the record number from the `#` column, or for
+            resources in `_NUMBER_PREFIXED`, that number with its prefix (`SJ-3`).
+        resource: The resource name, which decides what its display prefix wraps.
+
+    Returns:
+        The record number as ASCII digits.
+
+    Raises:
+        typer.BadParameter: If the value is not a record number. For most resources a
+            prefixed value such as `IN-42` is the internal ID, not the number, so
+            stripping the prefix would upload to whichever record has number 42.
+
+    """
+    prefix = _RECORD_PREFIX.get(resource)
+    number_prefixed = resource in _NUMBER_PREFIXED
+    if number_prefixed and prefix:
+        head, sep, rest = value.partition("-")
+        if sep and head.upper() == prefix:
+            value = rest
+    # isascii(): str.isdigit() also accepts "²" and "٤٢", which no record URL matches.
+    if value.isascii() and value.isdigit():
+        return value
+    raise typer.BadParameter(f"expected a record number{_record_number_hint(resource)}, got {value!r}", param_hint="'NUMBER'")
+
+
+def _record_number_hint(resource: str) -> str:
+    """Say which form of record number `resource` takes, for the error message."""
+    prefix = _RECORD_PREFIX.get(resource)
+    if not prefix:
+        return " from the # column"
+    if resource in _NUMBER_PREFIXED:
+        return f" such as 3 or {prefix}-3"
+    return f" from the # column (not the {prefix}-… ID)"
+
+
+def _read_attachment(path: Path) -> bytes:
+    """
+    Read one file for upload, refusing it if the API would.
+
+    The read stops one byte past the limit, so an oversized file is never loaded
+    whole, and the size is judged on the bytes actually read, not an earlier stat()
+    that the file could outgrow before the upload.
+
+    Args:
+        path: A path given with `--file`.
+
+    Returns:
+        The file's content.
+
+    Raises:
+        typer.BadParameter: If the file is empty or larger than `ATTACHMENT_MAX_BYTES`.
+
+    """
+    with path.open("rb") as fh:
+        content = fh.read(ATTACHMENT_MAX_BYTES + 1)
+    if not content:
+        raise typer.BadParameter(f"{path} is empty", param_hint="'--file'")
+    if len(content) > ATTACHMENT_MAX_BYTES:
+        raise typer.BadParameter(f"{path} is over the {_ATTACHMENT_MAX_LABEL} limit", param_hint="'--file'")
+    return content
+
+
+def _read_attachments(files: Sequence[Path]) -> Multipart:
+    """
+    Read every file for upload, so one bad file stops the upload before it starts.
+
+    Args:
+        files: The paths given with `--file`, in order.
+
+    Returns:
+        Multipart parts for `DualEntryClient.post(files=...)`.
+
+    Raises:
+        typer.BadParameter: If any file is empty or larger than `ATTACHMENT_MAX_BYTES`.
+
+    """
+    contents = [_read_attachment(path) for path in files]
+    return [("files", (path.name, content)) for path, content in zip(files, contents, strict=True)]
+
+
+def _add_attachment_commands(app: typer.Typer, path: str, resource: str, *, replace: bool) -> None:
+    """
+    Register `add-attachments`, and `replace-attachments` when the API offers it.
+
+    Args:
+        app: The resource's Typer app.
+        path: The API path, e.g. `"invoices"`.
+        resource: The resource name, for output formatting and record-number parsing.
+        replace: Whether the resource has `POST /{number}/attachments/replace/`.
+
+    """
+    prefix = _RECORD_PREFIX.get(resource)
+    number_help = f"Record number (the # column), e.g. 3 or {prefix}-3" if resource in _NUMBER_PREFIXED and prefix else "Record number (the # column)"
+
+    def upload(number: str, files: Sequence[Path], output: str, *, replace_existing: bool) -> None:
+        from dualentry_cli.main import get_client
+
+        record_number = _record_number_arg(number, resource)
+        multipart = _read_attachments(files)
+        route = "attachments/replace/" if replace_existing else "attachments/"
+        data = get_client().post(f"/{path}/{record_number}/{route}", files=multipart)
+        if output == "json":
+            format_output(data, resource=resource, fmt=output)
+        else:
+            print_attachments(data, label=f"{resource.replace('-', ' ')} {record_number}")
+
+    @app.command("add-attachments")
+    def add_attachments_cmd(
+        number: str = typer.Argument(help=number_help),
+        file: list[Path] = AttachmentFiles,
+        output: str = Format,
+    ) -> None:
+        upload(number, file, output, replace_existing=False)
+
+    add_attachments_cmd.__doc__ = "Attach file(s) to a record, keeping its existing attachments."
+
+    if replace:
+
+        @app.command("replace-attachments")
+        def replace_attachments_cmd(
+            number: str = typer.Argument(help=number_help),
+            file: list[Path] = AttachmentFiles,
+            output: str = Format,
+        ) -> None:
+            upload(number, file, output, replace_existing=True)
+
+        replace_attachments_cmd.__doc__ = "Replace all attachments on a record. Its current attachments are deleted."
+
+
 # ── Factory ─────────────────────────────────────────────────────────
 
 
@@ -189,6 +342,8 @@ def make_resource_app(
     has_delete: bool = False,
     has_number: bool = False,
     has_post: bool = False,
+    has_attachments: bool = False,
+    has_replace_attachments: bool = False,
     filters: set[str],
     status_param: str = "record_status",
     template: dict | None = None,
@@ -200,6 +355,9 @@ def make_resource_app(
 
     `filters` lists the flags this resource's v2 list endpoint declares; the rest
     are removed from `list` so the API cannot silently drop them.
+
+    `has_attachments` and `has_replace_attachments` mirror the v2 routes
+    `POST /{number}/attachments/` and `POST /{number}/attachments/replace/`.
     """
     import inspect
 
@@ -207,6 +365,12 @@ def make_resource_app(
     unknown = filters - ALL_FILTERS
     if unknown:
         msg = f"{name}: unknown filter flags {sorted(unknown)}"
+        raise ValueError(msg)
+    if has_replace_attachments and not has_attachments:
+        msg = f"{name}: has_replace_attachments requires has_attachments"
+        raise ValueError(msg)
+    if has_attachments and not has_number:
+        msg = f"{name}: has_attachments requires has_number (attachment routes take the record number)"
         raise ValueError(msg)
     remove = ALL_FILTERS - filters
 
@@ -425,6 +589,9 @@ def make_resource_app(
             format_output(result, resource=resource, fmt=output)
 
         post_cmd.__doc__ = f"Post a draft {resource}."
+
+    if has_attachments:
+        _add_attachment_commands(app, path, resource, replace=has_replace_attachments)
 
     if template is not None:
 
