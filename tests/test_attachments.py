@@ -1,6 +1,7 @@
 """`add-attachments` / `replace-attachments` on every resource whose v2 API accepts uploads."""
 
 import json
+import re
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -50,8 +51,14 @@ def receipt(tmp_path):
 
 
 def _flat(output: str) -> str:
-    """Undo rich's error-panel wrapping, so a message split across box lines still matches."""
-    return " ".join(output.replace("│", " ").split())
+    """
+    Undo rich's error-panel styling, so a message split across box lines still matches.
+
+    Rich colors its output under CI (it detects GitHub Actions), wrapping every panel
+    line in ANSI codes, so those go before the box borders and line breaks.
+    """
+    plain = re.sub(r"\x1b\[[0-9;]*m", "", output)
+    return " ".join(plain.replace("│", " ").split())
 
 
 def _commands(resource: str) -> set[str]:
