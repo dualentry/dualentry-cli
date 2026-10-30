@@ -10,7 +10,7 @@ import typer
 
 from dualentry_cli.cli import HelpfulGroup, make_list_command_cls
 from dualentry_cli.client import _MAX_PAGES, Multipart
-from dualentry_cli.output import _NUMBER_PREFIXED, _RECORD_PREFIX, format_output
+from dualentry_cli.output import _NUMBER_PREFIXED, _RECORD_PREFIX, format_output, print_attachments
 
 # Filter flags `list` can offer, with every option spelling each one accepts.
 FILTER_OPTIONS = {
@@ -300,7 +300,10 @@ def _add_attachment_commands(app: typer.Typer, path: str, resource: str, *, repl
         multipart = _read_attachments(files)
         route = "attachments/replace/" if replace_existing else "attachments/"
         data = get_client().post(f"/{path}/{record_number}/{route}", files=multipart)
-        format_output(data, resource=resource, fmt=output)
+        if output == "json":
+            format_output(data, resource=resource, fmt=output)
+        else:
+            print_attachments(data, label=f"{resource.replace('-', ' ')} {record_number}")
 
     @app.command("add-attachments")
     def add_attachments_cmd(

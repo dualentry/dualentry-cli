@@ -35,6 +35,10 @@ ATTACHMENT_RESOURCES = [
 NO_ATTACHMENT_RESOURCES = ["customer-credits", "customer-payments", "vendor-credits", "vendor-prepayments", "vendor-prepayment-applications", "bank-transfers"]
 
 
+# The shape the API returns for each attachment on the updated record.
+_UPLOADED = {"id": 1, "file_name": "receipt.pdf", "file_size": 16, "download_url": "https://files.example.com/receipt.pdf"}
+
+
 @pytest.fixture(autouse=True)
 def mock_get_client():
     mock_client = MagicMock()
@@ -107,10 +111,21 @@ class TestAddAttachments:
         assert kwargs["files"] == [("files", ("a.png", b"png")), ("files", ("b.csv", b"csv"))]
 
     def test_json_output_prints_the_updated_record(self, receipt, mock_get_client):
-        mock_get_client.post.return_value = {"number": 7, "attachments": [{"name": "receipt.pdf"}]}
+        mock_get_client.post.return_value = {"number": 7, "attachments": [_UPLOADED]}
         result = runner.invoke(app, ["invoices", "add-attachments", "7", "-f", str(receipt), "-o", "json"])
         assert result.exit_code == 0, result.output
         assert json.loads(result.output[result.output.index("{") :]) == mock_get_client.post.return_value
+
+    def test_human_output_lists_the_record_attachments(self, receipt, mock_get_client):
+        mock_get_client.post.return_value = {"number": 7, "attachments": [_UPLOADED, {**_UPLOADED, "id": 2, "file_name": "big.pdf", "file_size": 3_670_016}]}
+        result = runner.invoke(app, ["invoices", "add-attachments", "7", "-f", str(receipt)])
+        assert result.exit_code == 0, result.output
+        out = _flat(result.output)
+        assert "Attachments on invoice 7" in out
+        assert "receipt.pdf" in out
+        assert "16 B" in out
+        assert "3.5 MiB" in out
+        assert "2 attachments" in out
 
 
 class TestReplaceAttachments:
