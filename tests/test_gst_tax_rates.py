@@ -62,6 +62,7 @@ class TestList:
         client.get.assert_called_once_with("/gst-tax-rates/", params={"limit": 20, "offset": 0})
         out = _flat(result.output)
         assert "GST standard intra-state" in out
+        assert "IN (KA)" in out
         assert "18%" in out
         assert "0.180000" not in out
 

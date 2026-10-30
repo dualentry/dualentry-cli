@@ -1369,6 +1369,11 @@ def _fraction_as_percent(value: str | float) -> str:
     return f"{percent:f}%"
 
 
+def _gst_place(r: GstTaxRate) -> str:
+    """Country, plus the province or state when the rate is regional (e.g. "CA (ON)")."""
+    return r["country_code"] + (f" ({r['region']})" if r["region"] else "")
+
+
 def _gst_tax_rate_list(items: list[GstTaxRate]) -> None:
     table = Table(title="GST Tax Rates", show_lines=False)
     table.add_column("ID", style="dim", justify="right")
@@ -1381,7 +1386,7 @@ def _gst_tax_rate_list(items: list[GstTaxRate]) -> None:
     for r in items:
         table.add_row(
             str(r["id"]),
-            r["country_code"],
+            _gst_place(r),
             r["name"],
             r["tax_treatment"],
             _fraction_as_percent(r["rate"]),
@@ -1401,7 +1406,7 @@ def _gst_tax_rate_detail(r: GstTaxRate) -> None:
     details.add_column(style="dim", min_width=16)
     details.add_column()
     details.add_row("ID:", str(r["id"]))
-    details.add_row("Country:", r["country_code"] + (f" ({r['region']})" if r["region"] else ""))
+    details.add_row("Country:", _gst_place(r))
     details.add_row("Rate:", _fraction_as_percent(r["rate"]))
     details.add_row("Treatment:", r["tax_treatment"])
     if r["supply_category"]:
