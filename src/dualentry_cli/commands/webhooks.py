@@ -95,7 +95,7 @@ def get_cmd(webhook_id: UUID = WebhookId, output: str = Format) -> None:
 
 @app.command("create")
 def create_cmd(
-    url: str = typer.Option(..., "--url", help="HTTPS endpoint that will receive the events"),
+    url: str = typer.Option(..., "--url", help="Public http(s) URL that will receive the events; use https in production"),
     topics: list[str] | None = Topics,
     output: str = Format,
 ) -> None:

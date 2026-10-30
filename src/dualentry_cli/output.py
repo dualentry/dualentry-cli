@@ -1238,8 +1238,8 @@ def _webhook_detail(r: Webhook) -> None:
     details.add_row("UUID:", r["uuid"])
     details.add_row("State:", _webhook_state(r, verbose=True))
     details.add_row("Topics:", "\n".join(r["topics"]) or "[yellow]none: receives no events[/yellow]")
-    details.add_row("Created:", r["created_at"])
-    details.add_row("Modified:", r["last_modified_at"])
+    details.add_row("Created:", _local_minute(r["created_at"]))
+    details.add_row("Modified:", _local_minute(r["last_modified_at"]))
     console.print(details)
 
     # Create is the only response that carries the secret, and the API never returns it again.

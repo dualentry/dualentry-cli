@@ -251,6 +251,13 @@ class TestDeliveryTimes:
         assert "2026-10-03 06:11" in out
         assert "10:11" not in out
 
+    def test_webhook_detail_times_are_local_too(self, client):
+        client.get.return_value = _WEBHOOK
+        result = runner.invoke(app, ["webhooks", "get", UUID])
+        out = _flat(result.output)
+        assert "2026-10-01 05:00" in out
+        assert "+00:00" not in out
+
     def test_naive_timestamp_is_shown_as_given(self):
         from dualentry_cli.output import _local_minute
 
