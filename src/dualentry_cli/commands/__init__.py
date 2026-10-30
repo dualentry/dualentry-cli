@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+import shlex
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import typer
 
 from dualentry_cli.cli import HelpfulGroup, make_list_command_cls
 from dualentry_cli.client import _MAX_PAGES
 from dualentry_cli.output import _RECORD_PREFIX, format_output
+
+if TYPE_CHECKING:
+    from typer.models import OptionInfo
 
 # Filter flags `list` can offer, with every option spelling each one accepts.
 FILTER_OPTIONS = {
@@ -69,6 +74,68 @@ def _supplied(value) -> str | None:
     return value if isinstance(value, str) else None
 
 
+def _parse_csv_ints(value: str) -> list[int]:
+    """
+    Parse one occurrence of a comma-separated integer filter, e.g. `3,4`.
+
+    Args:
+        value: The raw option value as typed on the command line.
+
+    Returns:
+        The integers in the order given.
+
+    Raises:
+        typer.BadParameter: If the value holds no integers, or any token is not one.
+            An empty value is rejected, not ignored: dropping the filter would
+            widen the query to every row.
+
+    """
+    tokens = [token.strip() for token in value.split(",") if token.strip()]
+    if not tokens:
+        raise typer.BadParameter("expected comma-separated integers, got an empty value")
+    ints: list[int] = []
+    for token in tokens:
+        try:
+            ints.append(int(token))
+        except ValueError as e:
+            raise typer.BadParameter(f"expected comma-separated integers, got {token!r}") from e
+    return ints
+
+
+def _flatten_csv_ints(chunks: Sequence[list[int]] | None) -> list[int] | None:
+    """
+    Merge every occurrence of a repeatable CSV option into one flat list.
+
+    Args:
+        chunks: One parsed list per occurrence of the flag, or None when it was not passed.
+
+    Returns:
+        The merged integers, or None when the flag was not passed, so the filter is omitted.
+
+    """
+    merged = [n for chunk in chunks or () for n in chunk]
+    return merged or None
+
+
+def csv_ints_option(flag: str, *, help_text: str) -> OptionInfo:
+    """
+    Build a `--flag 1,2,3` option that typer hands to the command as `list[int] | None`.
+
+    A `list[int]` annotation makes typer treat the option as repeatable and run
+    `parser` once per occurrence, which yields `[[1, 2, 3]]`. The callback flattens
+    that, so `--flag 1,2 --flag 3` also works.
+
+    Args:
+        flag: The option spelling, e.g. `"--id"`.
+        help_text: The `--help` description.
+
+    Returns:
+        The option, for use inside `Annotated[list[int] | None, ...]`.
+
+    """
+    return typer.Option(flag, parser=_parse_csv_ints, callback=_flatten_csv_ints, metavar="<ids>", help=help_text)
+
+
 def _build_filter_params(
     search: str | None = None,
     status: str | None = None,
@@ -91,8 +158,14 @@ def _build_filter_params(
     return params
 
 
-# Map _do_list filter kwargs to CLI flags for the --all resume hint.
-_FILTER_CLI_FLAGS = {
+# How a filter kwarg is spelled in the --all resume hint: a value-taking flag, or an
+# (on, off) pair for a `--x/--no-x` boolean.
+ResumeFlag = str | tuple[str, str]
+
+# Map _do_list filter kwargs to CLI flags for the --all resume hint. Commands with
+# their own filters pass a mapping of their own; a filter left out of it would be
+# missing from the hint, and the "same filters" command would return other rows.
+_FILTER_CLI_FLAGS: dict[str, ResumeFlag] = {
     "search": "--search",
     "status": "--status",
     "start_date": "--start-date",
@@ -103,19 +176,65 @@ _FILTER_CLI_FLAGS = {
 }
 
 
-def _resume_all_command(path: str, next_offset: int, filters: dict) -> str:
-    """Build a copy-paste dualentry list --all command that continues from next_offset."""
+def _resume_all_command(
+    path: str,
+    next_offset: int,
+    filters: Mapping[str, object],
+    flags: Mapping[str, ResumeFlag] = _FILTER_CLI_FLAGS,
+) -> str:
+    """
+    Build a copy-paste dualentry list --all command that continues from next_offset.
+
+    Args:
+        path: The API path, whose segments are also the CLI command path.
+        next_offset: Where the next run should start.
+        filters: The filter kwargs the truncated run used.
+        flags: How each filter kwarg is spelled on the command line.
+
+    Returns:
+        A shell-quoted command line.
+
+    """
     parts = ["dualentry", *path.split("/"), "list", "--all", "--offset", str(next_offset)]
-    for key, flag in _FILTER_CLI_FLAGS.items():
+    for key, flag in flags.items():
         value = filters.get(key)
-        if value is not None:
+        if value is None:
+            continue
+        if isinstance(flag, tuple):
+            on, off = flag
+            parts.append(on if value else off)
+        elif isinstance(value, list):
+            parts.extend([flag, ",".join(map(str, value))])
+        else:
             parts.extend([flag, str(value)])
-    return " ".join(parts)
+    return shlex.join(parts)
 
 
-def _warn_all_truncated(path: str, *, fetched_through: int, total: int, next_offset: int, filters: dict) -> None:
-    """Tell the user --all stopped early and how to continue."""
-    cmd = _resume_all_command(path, next_offset, filters)
+def _warn_all_truncated(
+    path: str,
+    *,
+    fetched_through: int,
+    total: int,
+    next_offset: int,
+    filters: Mapping[str, object],
+    flags: Mapping[str, ResumeFlag] = _FILTER_CLI_FLAGS,
+    resume: str | None = None,
+) -> None:
+    """
+    Tell the user --all stopped early and how to continue.
+
+    Args:
+        path: The API path, used to rebuild the command when `resume` is not given.
+        fetched_through: How many items the run reached.
+        total: The API's total count.
+        next_offset: Where the next run should start.
+        filters: The filter kwargs the truncated run used.
+        flags: How each filter kwarg is spelled on the command line.
+        resume: A ready-made resume command, for commands whose CLI shape is not
+            `<api path> list` (e.g. `webhooks deliveries <uuid>`).
+
+    """
+    cmd = resume or _resume_all_command(path, next_offset, filters, flags)
     typer.secho(
         f"Warning: reached {fetched_through} of {total} items; stopped at the {_MAX_PAGES}-page limit.\nTo continue, re-run with the same filters:\n  {cmd}",
         fg=typer.colors.YELLOW,
@@ -123,7 +242,18 @@ def _warn_all_truncated(path: str, *, fetched_through: int, total: int, next_off
     )
 
 
-def _do_list(client, path: str, resource: str, *, limit: int, offset: int, all_pages: bool, output: str, **filters):
+def _do_list(
+    client,
+    path: str,
+    resource: str,
+    *,
+    limit: int,
+    offset: int,
+    all_pages: bool,
+    output: str,
+    resume_flags: Mapping[str, ResumeFlag] = _FILTER_CLI_FLAGS,
+    **filters,
+) -> None:
     """Shared list logic for all resources."""
     params = _build_filter_params(**filters)
     next_offset = None
@@ -142,6 +272,7 @@ def _do_list(client, path: str, resource: str, *, limit: int, offset: int, all_p
             total=data.get("count", next_offset),
             next_offset=next_offset,
             filters=filters,
+            flags=resume_flags,
         )
 
 
