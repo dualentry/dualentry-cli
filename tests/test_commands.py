@@ -260,6 +260,25 @@ class TestParityResourceCommands:
         assert "comma-separated integers" in result.output
         assert "abc" in result.output
 
+    def test_statistical_journal_list_renders_an_integer_account_number(self, mock_get_client):
+        # The API sends account_number as an int; rich refuses to render a bare int.
+        mock_get_client.get.return_value = {
+            "items": [
+                {
+                    "number": 1,
+                    "date": "2026-08-12",
+                    "period": "2026-08-01",
+                    "account_number": 90100,
+                    "record_status": "posted",
+                    "memo": "",
+                },
+            ],
+            "count": 1,
+        }
+        result = runner.invoke(app, ["statistical-journals", "list"])
+        assert result.exit_code == 0, result.output
+        assert "90100" in result.output
+
 
 class TestClassificationsLinesCommands:
     def test_list_with_no_filters(self, mock_get_client):

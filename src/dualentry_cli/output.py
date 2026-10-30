@@ -1370,7 +1370,7 @@ def _statistical_journal_list(items):
             _fmt_id(r.get("number"), "statistical-journal"),
             str(r.get("date", "-")),
             str(r.get("period", "-")),
-            r.get("account_number", "-"),
+            str(r.get("account_number") or "-"),
             _status_badge(r.get("record_status", "")),
             (r.get("memo") or "-")[:40],
         )
