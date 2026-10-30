@@ -37,6 +37,10 @@ _RECORD_PREFIX: dict[str, str] = {
     "statistical-journal": "SJ",
 }
 
+# Resources whose prefixed display ID wraps the record number (SJ-3 is number 3).
+# Every other prefix wraps the internal ID, which record URLs do not accept.
+_NUMBER_PREFIXED: frozenset[str] = frozenset({"statistical-journal"})
+
 
 def _fmt_id(record_id, resource: str = "") -> str:
     """Format a record ID with its prefix, e.g. 135934 → IN-135934 (matches UI display)."""

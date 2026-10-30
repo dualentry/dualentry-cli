@@ -6,7 +6,7 @@ import os
 import sys
 import time
 import uuid
-from typing import Any
+from typing import Any, TypeAlias
 
 import httpx
 
@@ -32,6 +32,10 @@ _IDEMPOTENCY_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 _RETRY_AFTER_HEADER = "Retry-After"
 
 _MAX_RETRY_AFTER = 60
+
+# One `("files", (filename, content))` part per upload. Bytes, not open files: a
+# retried request resends these parts, and a file handle would already be spent.
+Multipart: TypeAlias = list[tuple[str, tuple[str, bytes]]]
 
 # Hard ceiling for --all crawls: page_size 100 x 1000 pages = 100_000 items.
 # Truncation must warn; never report the truncated length as the API total.
@@ -254,7 +258,7 @@ class DualEntryClient:
         path: str,
         json: dict[str, Any] | None = None,
         *,
-        files: list[tuple[str, tuple[str, bytes]]] | None = None,
+        files: Multipart | None = None,
     ) -> dict:
         if files is not None:
             return self._request("POST", path, files=files)
