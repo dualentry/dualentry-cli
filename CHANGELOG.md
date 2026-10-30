@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 - Add `add-attachments` to the 13 transaction types whose API accepts file uploads, and `replace-attachments` to invoices. Files are checked against the 10 MiB limit before anything is sent
+- Fix attachment uploads failing with "Idempotency-Key is only supported on JSON requests". Uploads are sent without the key and retried only after a 429, so a retry cannot attach files twice
 - `statistical-journals add-attachments` now checks the 10 MiB limit before uploading, rejects folders, and rejects prefixes other than `SJ-`
 - Line-item tables label the quantity column Quantity
 - Update the CLI greeting logo to DualEntry
