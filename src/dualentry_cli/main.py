@@ -14,6 +14,7 @@ from dualentry_cli.commands.classifications_lines import app as classifications_
 from dualentry_cli.commands.export_jobs import app as export_jobs_app
 from dualentry_cli.commands.ije_extras import IJE_CHECKS, IJE_ONLINE_EXTRA_CHECKS, IJE_TEMPLATE
 from dualentry_cli.commands.statistical_journals import app as statistical_journals_app
+from dualentry_cli.commands.webhooks import app as webhooks_app
 from dualentry_cli.config import Config
 
 app = typer.Typer(name="dualentry", help="DualEntry accounting CLI", no_args_is_help=True, cls=HelpfulGroup)
@@ -121,6 +122,7 @@ app.add_typer(make_resource_app("inbox items", "inbox-item", "inbox", has_get=Fa
 app.add_typer(bank_match_app, name="bank-match")
 app.add_typer(bank_connections_app, name="bank-connections")
 app.add_typer(export_jobs_app, name="export-jobs")
+app.add_typer(webhooks_app, name="webhooks")
 
 
 def version_callback(value: bool):

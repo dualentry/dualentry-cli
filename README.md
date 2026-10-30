@@ -82,6 +82,20 @@ dualentry export-jobs create --format json
 dualentry export-jobs wait 42 --interval 10 --timeout 1800
 ```
 
+### Send events to your endpoint with a webhook
+
+```bash
+# See what you can subscribe to
+dualentry webhooks topics
+
+# Register an endpoint; save the signing secret it prints, it is shown only once
+dualentry webhooks create --url https://hooks.example.com/dualentry -t invoice.created -t bill.posted
+
+# Check what was delivered, and re-enable a webhook that was auto-disabled after failures
+dualentry webhooks deliveries 3f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6b
+dualentry webhooks update 3f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6b --active
+```
+
 ## Available Resources
 
 | Category | Resources |
@@ -93,7 +107,7 @@ dualentry export-jobs wait 42 --interval 10 --timeout 1800
 | **Automation** | Recurring Invoices, Recurring Bills, Workflows, Contracts |
 | **Close Management** | Bank Match |
 | **Bank Feeds** | Bank Connections |
-| **Developers** | Export Jobs (destination data refresh) |
+| **Developers** | Export Jobs (destination data refresh), Webhooks |
 
 Most resources support `list`, `get`, `create`, and `update`; some (e.g. Bank Connections, Bank Match) expose a different verb set — see `--help`.
 Export jobs support `create`, `list`, `get`, and `wait` (poll until finished).
