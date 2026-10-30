@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Add `gst-tax-rates` commands (`list`, `get`) to look up the `gst_tax_rate_id` for line items, filterable by `--country`, `--treatment`, `--active/--inactive`, and `--updated-after/--updated-before`. Rates show as percentages, with the component split for rates such as CGST + SGST
 - Line-item tables label the quantity column Quantity
 - Update the CLI greeting logo to DualEntry
 - Add `export-jobs` commands (`create`, `list`, `get`, `wait`) for on-demand destination data refreshes via the public API

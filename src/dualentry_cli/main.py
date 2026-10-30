@@ -11,6 +11,7 @@ from dualentry_cli.commands.accounts import app as accounts_app
 from dualentry_cli.commands.bank_connections import app as bank_connections_app
 from dualentry_cli.commands.bank_match import app as bank_match_app
 from dualentry_cli.commands.export_jobs import app as export_jobs_app
+from dualentry_cli.commands.gst_tax_rates import app as gst_tax_rates_app
 from dualentry_cli.commands.ije_extras import IJE_CHECKS, IJE_ONLINE_EXTRA_CHECKS, IJE_TEMPLATE
 from dualentry_cli.commands.statistical_journals import app as statistical_journals_app
 from dualentry_cli.config import Config
@@ -80,6 +81,7 @@ app.add_typer(
     make_resource_app("VAT rates", "vat-rate", "vat-rates", has_create=False, has_update=False, filters=set()),
     name="vat-rates",
 )
+app.add_typer(gst_tax_rates_app, name="gst-tax-rates")  # Read-only, with country and treatment filters
 
 # Recurring
 recurring_app = typer.Typer(help="Manage recurring records", no_args_is_help=True, cls=HelpfulGroup)

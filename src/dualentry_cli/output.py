@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+from decimal import Decimal, InvalidOperation
+from typing import TypedDict
 
 from rich.console import Console
 from rich.panel import Panel
@@ -1318,6 +1320,116 @@ def _vat_rate_detail(r):
 
 
 _register("vat-rate", _vat_rate_list, _vat_rate_detail)
+
+
+# ── GST tax rate ─────────────────────────────────────────────────────
+
+
+class GstTaxRateComponent(TypedDict):
+    """One part of a split rate, e.g. the CGST half of an India intra-state rate."""
+
+    id: int
+    component_type: str
+    rate: str
+    region: str | None
+    position: int
+
+
+class GstTaxRate(TypedDict):
+    """One rate from `/gst-tax-rates/`. `rate` is a fraction: "0.100000" is 10%."""
+
+    id: int
+    country_code: str
+    name: str
+    rate: str
+    tax_treatment: str
+    supply_category: str | None
+    region: str | None
+    valid_from: str
+    valid_to: str | None
+    is_active: bool
+    is_system: bool
+    description: str | None
+    components: list[GstTaxRateComponent]
+
+
+def _fraction_as_percent(value: str | float) -> str:
+    """
+    Show an API rate fraction as a percentage: "0.100000" → "10%", "0.087500" → "8.75%".
+
+    The raw fraction is easy to misread as a percentage (0.1%), so human output
+    converts it. A value that isn't a number is shown as given.
+    """
+    try:
+        percent = (Decimal(str(value)) * 100).normalize()
+    except InvalidOperation:
+        return str(value)
+    if not percent.is_finite():
+        return str(value)
+    return f"{percent:f}%"
+
+
+def _gst_place(r: GstTaxRate) -> str:
+    """Country, plus the province or state when the rate is regional (e.g. "CA (ON)")."""
+    return r["country_code"] + (f" ({r['region']})" if r["region"] else "")
+
+
+def _gst_tax_rate_list(items: list[GstTaxRate]) -> None:
+    table = Table(title="GST Tax Rates", show_lines=False)
+    table.add_column("ID", style="dim", justify="right")
+    table.add_column("Country")
+    table.add_column("Name", min_width=20, style="bold")
+    table.add_column("Treatment")
+    table.add_column("Rate", justify="right")
+    table.add_column("Active")
+
+    for r in items:
+        table.add_row(
+            str(r["id"]),
+            _gst_place(r),
+            r["name"],
+            r["tax_treatment"],
+            _fraction_as_percent(r["rate"]),
+            "yes" if r["is_active"] else "no",
+        )
+
+    console.print(table)
+
+
+def _gst_tax_rate_detail(r: GstTaxRate) -> None:
+    header = Text()
+    header.append("GST TAX RATE", style="bold")
+    header.append(f"  {r['name']}", style="bold cyan")
+    console.print(Panel(header, expand=False))
+
+    details = Table.grid(padding=(0, 2))
+    details.add_column(style="dim", min_width=16)
+    details.add_column()
+    details.add_row("ID:", str(r["id"]))
+    details.add_row("Country:", _gst_place(r))
+    details.add_row("Rate:", _fraction_as_percent(r["rate"]))
+    details.add_row("Treatment:", r["tax_treatment"])
+    if r["supply_category"]:
+        details.add_row("Supply:", r["supply_category"])
+    details.add_row("Valid:", f"{r['valid_from']} to {r['valid_to'] or 'open-ended'}")
+    details.add_row("Active:", "yes" if r["is_active"] else "no")
+    details.add_row("System rate:", "yes" if r["is_system"] else "no")
+    if r["description"]:
+        details.add_row("Description:", r["description"])
+    console.print(details)
+
+    # Split rates (CGST + SGST, GST + PST) apply as parts; show how the total breaks down.
+    if r["components"]:
+        parts = Table(title="Components", show_lines=False)
+        parts.add_column("Type", style="bold")
+        parts.add_column("Rate", justify="right")
+        parts.add_column("Region")
+        for c in sorted(r["components"], key=lambda c: c["position"]):
+            parts.add_row(c["component_type"], _fraction_as_percent(c["rate"]), c["region"] or "-")
+        console.print(parts)
+
+
+_register("gst-tax-rate", _gst_tax_rate_list, _gst_tax_rate_detail)
 
 
 # ── Statistical journal ──────────────────────────────────────────────
