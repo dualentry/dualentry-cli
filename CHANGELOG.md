@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- `journal-entries list --adjusting-entry true|false` returns only adjusting entries, or only regular ones
+- Validation errors name the API `error_code` when the API returns one, e.g. `adjusting_entry_permission_required`
 - Line-item tables label the quantity column Quantity
 - Update the CLI greeting logo to DualEntry
 - Add `export-jobs` commands (`create`, `list`, `get`, `wait`) for on-demand destination data refreshes via the public API

@@ -124,12 +124,17 @@ class DualEntryClient:
         if status == 404:
             raise APIError(404, "Resource not found. Check the ID or number and try again.")
         if status == 422:
+            code = None
             try:
                 detail = response.json()
                 errors = detail.get("errors", detail)
+                code = detail.get("error_code")
             except Exception:
                 errors = response.text
-            raise APIError(422, f"Validation error: {errors}")
+            # Coded refusals (period_locked, adjusting_entry_bank_account, ...) carry a stable
+            # error_code that scripts branch on; the messages alone are for people.
+            label = f"Validation error [{code}]" if code else "Validation error"
+            raise APIError(422, f"{label}: {errors}")
         if status == 409:
             detail = _server_detail(response)
             if _RETRY_AFTER_HEADER in response.headers:

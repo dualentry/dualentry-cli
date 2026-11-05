@@ -59,7 +59,10 @@ app.add_typer(make_resource_app("vendor refunds", "vendor-refund", "vendor-refun
 app.add_typer(make_resource_app("direct expenses", "direct-expense", "direct-expenses", has_number=True, filters=TXN_VENDOR), name="direct-expenses")
 
 # Accounting
-app.add_typer(make_resource_app("journal entries", "journal-entry", "journal-entries", has_number=True, filters=TXN_ALL_PARTIES), name="journal-entries")
+app.add_typer(
+    make_resource_app("journal entries", "journal-entry", "journal-entries", has_number=True, filters=TXN_ALL_PARTIES | {"adjusting_entry"}),
+    name="journal-entries",
+)
 app.add_typer(statistical_journals_app, name="statistical-journals")
 app.add_typer(make_resource_app("bank transfers", "bank-transfer", "bank-transfers", has_number=True, filters=TXN), name="bank-transfers")
 app.add_typer(
