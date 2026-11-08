@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import TypedDict
 
 from rich.console import Console
 from rich.panel import Panel
@@ -1128,6 +1129,38 @@ def _classification_detail(r):
 _register("classification", _classification_list, _classification_detail)
 
 
+class ClassificationLine(TypedDict):
+    """One row of `GET /classifications-lines/` (the public v2 line schema)."""
+
+    id: int
+    name: str
+    is_active: bool
+    classification_id: int
+    classification_name: str
+
+
+def _classification_line_list(items: list[ClassificationLine]) -> None:
+    """Render lines with their parent classification, since the list spans all of them."""
+    table = Table(title="Classification Lines", show_lines=False)
+    table.add_column("ID", style="dim", justify="right")
+    table.add_column("Name", min_width=24, style="bold")
+    table.add_column("Classification", min_width=16)
+    table.add_column("Active")
+
+    for r in items:
+        table.add_row(
+            str(r["id"]),
+            r["name"],
+            r["classification_name"],
+            "yes" if r["is_active"] else "no",
+        )
+
+    console.print(table)
+
+
+_register("classification-line", _classification_line_list, None)
+
+
 # ── Depreciation Book ────────────────────────────────────────────────
 
 
@@ -1337,7 +1370,7 @@ def _statistical_journal_list(items):
             _fmt_id(r.get("number"), "statistical-journal"),
             str(r.get("date", "-")),
             str(r.get("period", "-")),
-            r.get("account_number", "-"),
+            str(r.get("account_number") or "-"),
             _status_badge(r.get("record_status", "")),
             (r.get("memo") or "-")[:40],
         )

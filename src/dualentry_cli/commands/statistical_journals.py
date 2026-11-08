@@ -13,10 +13,12 @@ from dualentry_cli.commands import (
     Format,
     Limit,
     Offset,
+    ResumeFlag,
     Search,
     Status,
     _load_json_file,
     _strip_record_prefix,
+    csv_ints_option,
 )
 from dualentry_cli.commands.actions import run_list
 from dualentry_cli.output import format_output
@@ -24,31 +26,30 @@ from dualentry_cli.output import format_output
 app = typer.Typer(help="Manage statistical journals", no_args_is_help=True, cls=HelpfulGroup)
 
 
-def _parse_csv_ints(value: str) -> list[int] | None:
-    """Parse a comma-separated list of integers for list filters."""
-    raw = value.strip()
-    if not raw:
-        return None
-    result: list[int] = []
-    for part in raw.split(","):
-        token = part.strip()
-        if not token:
-            continue
-        try:
-            result.append(int(token))
-        except ValueError:
-            raise typer.BadParameter(f"expected comma-separated integers, got {token!r}") from None
-    return result or None
-
-
-def _csv_ints_option(flag: str, *, help: str) -> typer.Option:
-    return typer.Option(flag, parser=_parse_csv_ints, help=help)
-
-
 def _csv_strings(value: str | None) -> list[str] | None:
     if not value:
         return None
     return [part.strip() for part in value.split(",") if part.strip()]
+
+
+# Every list filter, so the --all resume hint repeats all of them.
+_RESUME_FLAGS: dict[str, ResumeFlag] = {
+    "search": "--search",
+    "status": "--status",
+    "company_id": "--company",
+    "date_start": "--date-start",
+    "date_end": "--date-end",
+    "period_start": "--period-start",
+    "period_end": "--period-end",
+    "number": "--number",
+    "account_id": "--account-id",
+    "account_number": "--account-number",
+    "line_account_id": "--line-account-id",
+    "line_account_number": "--line-account-number",
+    "updated_after": "--updated-after",
+    "updated_before": "--updated-before",
+    "ordering": "--ordering",
+}
 
 
 @app.command("list")
@@ -65,16 +66,16 @@ def list_cmd(
     period_end: str | None = typer.Option(None, "--period-end", help="Filter to period end (YYYY-MM-DD)"),
     number: Annotated[
         list[int] | None,
-        _csv_ints_option("--number", help="Filter by record number(s), comma-separated"),
+        csv_ints_option("--number", help_text="Filter by record number(s), comma-separated"),
     ] = None,
     account_id: Annotated[
         list[int] | None,
-        _csv_ints_option("--account-id", help="Filter by account ID(s), comma-separated"),
+        csv_ints_option("--account-id", help_text="Filter by account ID(s), comma-separated"),
     ] = None,
     account_number: str | None = typer.Option(None, "--account-number", help="Filter by account number(s), comma-separated"),
     line_account_id: Annotated[
         list[int] | None,
-        _csv_ints_option("--line-account-id", help="Filter by line account ID(s), comma-separated"),
+        csv_ints_option("--line-account-id", help_text="Filter by line account ID(s), comma-separated"),
     ] = None,
     line_account_number: str | None = typer.Option(None, "--line-account-number", help="Filter by line account number(s), comma-separated"),
     updated_after: str | None = typer.Option(None, "--updated-after", help="Updated after timestamp (ISO 8601)"),
@@ -86,6 +87,7 @@ def list_cmd(
     run_list(
         "statistical-journals",
         resource="statistical-journal",
+        resume_flags=_RESUME_FLAGS,
         limit=limit,
         offset=offset,
         all_pages=all_pages,
