@@ -1,11 +1,3 @@
-"""
-Classification line commands (read-only list across every classification).
-
-`/classifications-lines/` has no detail, create, or update route, so `list` is the
-only command. It gets its own module, not the resource factory, because its filters
-(IDs, a name match, an active flag) don't fit the factory's shared flag set.
-"""
-
 from __future__ import annotations
 
 from typing import Annotated
