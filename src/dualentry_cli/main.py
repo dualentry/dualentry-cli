@@ -10,10 +10,12 @@ from dualentry_cli.commands import make_resource_app
 from dualentry_cli.commands.accounts import app as accounts_app
 from dualentry_cli.commands.bank_connections import app as bank_connections_app
 from dualentry_cli.commands.bank_match import app as bank_match_app
+from dualentry_cli.commands.classifications_lines import app as classifications_lines_app
 from dualentry_cli.commands.export_jobs import app as export_jobs_app
 from dualentry_cli.commands.gst_tax_rates import app as gst_tax_rates_app
 from dualentry_cli.commands.ije_extras import IJE_CHECKS, IJE_ONLINE_EXTRA_CHECKS, IJE_TEMPLATE
 from dualentry_cli.commands.statistical_journals import app as statistical_journals_app
+from dualentry_cli.commands.webhooks import app as webhooks_app
 from dualentry_cli.config import Config
 
 app = typer.Typer(name="dualentry", help="DualEntry accounting CLI", no_args_is_help=True, cls=HelpfulGroup)
@@ -30,37 +32,44 @@ TXN_VENDOR = TXN | {"vendor"}
 TXN_ALL_PARTIES = TXN | {"customer", "vendor"}
 
 # Custom-formatted resources (use factory - output.py handles formatting via resource name)
-app.add_typer(make_resource_app("invoices", "invoice", "invoices", has_number=True, filters=TXN_CUSTOMER), name="invoices")
-app.add_typer(make_resource_app("bills", "bill", "bills", has_number=True, filters=TXN_VENDOR), name="bills")
+app.add_typer(make_resource_app("invoices", "invoice", "invoices", has_number=True, has_attachments=True, has_replace_attachments=True, filters=TXN_CUSTOMER), name="invoices")
+app.add_typer(make_resource_app("bills", "bill", "bills", has_number=True, has_attachments=True, filters=TXN_VENDOR), name="bills")
 app.add_typer(accounts_app, name="accounts")  # Accounts has custom filtering (no status/date filters)
 
 # Money-in
-app.add_typer(make_resource_app("sales orders", "sales-order", "sales-orders", has_number=True, filters=TXN_CUSTOMER), name="sales-orders")
+app.add_typer(make_resource_app("sales orders", "sales-order", "sales-orders", has_number=True, has_attachments=True, filters=TXN_CUSTOMER), name="sales-orders")
 app.add_typer(make_resource_app("customer payments", "customer-payment", "customer-payments", has_number=True, filters=TXN_CUSTOMER), name="customer-payments")
 app.add_typer(make_resource_app("customer credits", "customer-credit", "customer-credits", has_number=True, filters=TXN_CUSTOMER), name="customer-credits")
-app.add_typer(make_resource_app("customer prepayments", "customer-prepayment", "customer-prepayments", has_number=True, filters=TXN_CUSTOMER), name="customer-prepayments")
 app.add_typer(
-    make_resource_app("customer prepayment applications", "customer-prepayment-application", "customer-prepayment-applications", has_number=True, filters=TXN_CUSTOMER),
+    make_resource_app("customer prepayments", "customer-prepayment", "customer-prepayments", has_number=True, has_attachments=True, filters=TXN_CUSTOMER),
+    name="customer-prepayments",
+)
+app.add_typer(
+    make_resource_app(
+        "customer prepayment applications", "customer-prepayment-application", "customer-prepayment-applications", has_number=True, has_attachments=True, filters=TXN_CUSTOMER
+    ),
     name="customer-prepayment-applications",
 )
-app.add_typer(make_resource_app("customer deposits", "customer-deposit", "customer-deposits", has_number=True, filters=TXN_CUSTOMER), name="customer-deposits")
-app.add_typer(make_resource_app("customer refunds", "customer-refund", "customer-refunds", has_number=True, filters=TXN_CUSTOMER), name="customer-refunds")
-app.add_typer(make_resource_app("cash sales", "cash-sale", "cash-sales", has_number=True, filters=TXN_CUSTOMER), name="cash-sales")
+app.add_typer(
+    make_resource_app("customer deposits", "customer-deposit", "customer-deposits", has_number=True, has_attachments=True, filters=TXN_CUSTOMER), name="customer-deposits"
+)
+app.add_typer(make_resource_app("customer refunds", "customer-refund", "customer-refunds", has_number=True, has_attachments=True, filters=TXN_CUSTOMER), name="customer-refunds")
+app.add_typer(make_resource_app("cash sales", "cash-sale", "cash-sales", has_number=True, has_attachments=True, filters=TXN_CUSTOMER), name="cash-sales")
 
 # Money-out
-app.add_typer(make_resource_app("purchase orders", "purchase-order", "purchase-orders", has_number=True, filters=TXN_VENDOR), name="purchase-orders")
-app.add_typer(make_resource_app("vendor payments", "vendor-payment", "vendor-payments", has_number=True, filters=TXN_VENDOR), name="vendor-payments")
+app.add_typer(make_resource_app("purchase orders", "purchase-order", "purchase-orders", has_number=True, has_attachments=True, filters=TXN_VENDOR), name="purchase-orders")
+app.add_typer(make_resource_app("vendor payments", "vendor-payment", "vendor-payments", has_number=True, has_attachments=True, filters=TXN_VENDOR), name="vendor-payments")
 app.add_typer(make_resource_app("vendor credits", "vendor-credit", "vendor-credits", has_number=True, filters=TXN_VENDOR), name="vendor-credits")
 app.add_typer(make_resource_app("vendor prepayments", "vendor-prepayment", "vendor-prepayments", has_number=True, filters=TXN_VENDOR), name="vendor-prepayments")
 app.add_typer(
     make_resource_app("vendor prepayment applications", "vendor-prepayment-application", "vendor-prepayment-applications", has_number=True, filters=TXN_VENDOR),
     name="vendor-prepayment-applications",
 )
-app.add_typer(make_resource_app("vendor refunds", "vendor-refund", "vendor-refunds", has_number=True, filters=TXN_VENDOR), name="vendor-refunds")
-app.add_typer(make_resource_app("direct expenses", "direct-expense", "direct-expenses", has_number=True, filters=TXN_VENDOR), name="direct-expenses")
+app.add_typer(make_resource_app("vendor refunds", "vendor-refund", "vendor-refunds", has_number=True, has_attachments=True, filters=TXN_VENDOR), name="vendor-refunds")
+app.add_typer(make_resource_app("direct expenses", "direct-expense", "direct-expenses", has_number=True, has_attachments=True, filters=TXN_VENDOR), name="direct-expenses")
 
 # Accounting
-app.add_typer(make_resource_app("journal entries", "journal-entry", "journal-entries", has_number=True, filters=TXN_ALL_PARTIES), name="journal-entries")
+app.add_typer(make_resource_app("journal entries", "journal-entry", "journal-entries", has_number=True, has_attachments=True, filters=TXN_ALL_PARTIES), name="journal-entries")
 app.add_typer(statistical_journals_app, name="statistical-journals")
 app.add_typer(make_resource_app("bank transfers", "bank-transfer", "bank-transfers", has_number=True, filters=TXN), name="bank-transfers")
 app.add_typer(
@@ -75,6 +84,7 @@ app.add_typer(make_resource_app("vendors", "vendor", "vendors", filters=TXN), na
 app.add_typer(make_resource_app("items", "item", "items", filters={"search", "status"}), name="items")
 app.add_typer(make_resource_app("companies", "company", "companies", has_create=False, has_update=False, filters={"search"}), name="companies")
 app.add_typer(make_resource_app("classifications", "classification", "classifications", filters={"search"}), name="classifications")
+app.add_typer(classifications_lines_app, name="classifications-lines")  # List-only, with line-specific filters
 app.add_typer(make_resource_app("custom fields", "custom-field", "custom-fields", has_delete=True, filters={"search"}), name="custom-fields")
 app.add_typer(make_resource_app("product tax codes", "product-tax-code", "product-tax-codes", has_delete=True, filters={"search"}), name="product-tax-codes")
 app.add_typer(
@@ -121,6 +131,7 @@ app.add_typer(make_resource_app("inbox items", "inbox-item", "inbox", has_get=Fa
 app.add_typer(bank_match_app, name="bank-match")
 app.add_typer(bank_connections_app, name="bank-connections")
 app.add_typer(export_jobs_app, name="export-jobs")
+app.add_typer(webhooks_app, name="webhooks")
 
 
 def version_callback(value: bool):

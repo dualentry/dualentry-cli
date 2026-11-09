@@ -6,10 +6,18 @@ from enum import StrEnum
 import typer
 
 from dualentry_cli.cli import HelpfulGroup
-from dualentry_cli.commands import AllPages, Format, Limit, Offset
+from dualentry_cli.commands import AllPages, Format, Limit, Offset, ResumeFlag
 from dualentry_cli.commands.actions import run_get, run_list
 
 app = typer.Typer(help="Look up GST tax rates (AU, NZ, SG, IN, CA GST and MY SST)", no_args_is_help=True, cls=HelpfulGroup)
+
+_LIST_RESUME_FLAGS: dict[str, ResumeFlag] = {
+    "country_code": "--country",
+    "tax_treatment": "--treatment",
+    "is_active": ("--active", "--inactive"),
+    "updated_after": "--updated-after",
+    "updated_before": "--updated-before",
+}
 
 
 # Mirrors the API's country and treatment enums, so a typo fails here with the valid
@@ -64,11 +72,10 @@ def list_cmd(
     output: str = Format,
 ) -> None:
     """List GST tax rates. Use a rate's ID as `gst_tax_rate_id` on line items."""
-    # TODO(#39): pass resume_flags for these filters once run_list accepts them. Until
-    # then the --all resume hint omits them; it only appears past 100,000 rates.
     run_list(
         "gst-tax-rates",
         resource="gst-tax-rate",
+        resume_flags=_LIST_RESUME_FLAGS,
         limit=limit,
         offset=offset,
         all_pages=all_pages,

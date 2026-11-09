@@ -63,6 +63,16 @@ dualentry invoices create --file invoice.json
 dualentry journal-entries list --start-date 2025-01-01 --end-date 2025-03-31 --format json
 ```
 
+### Attach a receipt to a bill
+
+```bash
+# Pass the record number from the # column; repeat -f for several files (10 MiB max each)
+dualentry bills add-attachments 1042 -f receipt.pdf -f approval.eml
+
+# Invoices can also swap out every attachment at once
+dualentry invoices replace-attachments 318 -f signed-invoice.pdf
+```
+
 ### Automate in CI/CD
 
 Set `X_API_KEY` in your environment for non-interactive authentication:
@@ -82,6 +92,20 @@ dualentry export-jobs create --format json
 dualentry export-jobs wait 42 --interval 10 --timeout 1800
 ```
 
+### Send events to your endpoint with a webhook
+
+```bash
+# See what you can subscribe to
+dualentry webhooks topics
+
+# Register an endpoint; save the signing secret it prints, it is shown only once
+dualentry webhooks create --url https://hooks.example.com/dualentry -t core.classification/created -t core.account/created
+
+# Check what was delivered, and re-enable a webhook that was auto-disabled after failures
+dualentry webhooks deliveries 3f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6b
+dualentry webhooks update 3f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6b --active
+```
+
 ## Available Resources
 
 | Category | Resources |
@@ -89,15 +113,16 @@ dualentry export-jobs wait 42 --interval 10 --timeout 1800
 | **Receivables** | Invoices, Sales Orders, Customer Payments, Credits, Deposits |
 | **Payables** | Bills, Purchase Orders, Vendor Payments, Credits, Refunds |
 | **Accounting** | Journal Entries, Bank Transfers, Fixed Assets, Depreciation |
-| **Master Data** | Customers, Vendors, Items, Accounts, Classifications |
+| **Master Data** | Customers, Vendors, Items, Accounts, Classifications, Classification Lines |
 | **Tax** | VAT Rates, GST Tax Rates, Product Tax Codes |
 | **Automation** | Recurring Invoices, Recurring Bills, Workflows, Contracts |
 | **Close Management** | Bank Match |
 | **Bank Feeds** | Bank Connections |
-| **Developers** | Export Jobs (destination data refresh) |
+| **Developers** | Export Jobs (destination data refresh), Webhooks |
 
 Most resources support `list`, `get`, `create`, and `update`; some (e.g. Bank Connections, Bank Match) expose a different verb set — see `--help`.
 Export jobs support `create`, `list`, `get`, and `wait` (poll until finished).
+Transactions that accept files support `add-attachments` (see `dualentry <resource> --help`); invoices also support `replace-attachments`.
 
 ## Output Formats
 

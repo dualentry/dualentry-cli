@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 from rich.console import Console
 from rich.panel import Panel
@@ -39,6 +40,10 @@ _RECORD_PREFIX: dict[str, str] = {
     "statistical-journal": "SJ",
 }
 
+# Resources whose prefixed display ID wraps the record number (SJ-3 is number 3).
+# Every other prefix wraps the internal ID, which record URLs do not accept.
+_NUMBER_PREFIXED: frozenset[str] = frozenset({"statistical-journal"})
+
 
 def _fmt_id(record_id, resource: str = "") -> str:
     """Format a record ID with its prefix, e.g. 135934 → IN-135934 (matches UI display)."""
@@ -60,6 +65,27 @@ def format_output(data: dict, resource: str = "generic", fmt: str = "human") -> 
         return
 
     _print_detail(data, resource)
+
+
+def _file_size(size: int) -> str:
+    for unit in ("B", "KiB"):
+        if size < 1024:
+            return f"{size:g} {unit}"
+        size /= 1024
+    return f"{size:.1f} MiB"
+
+
+def print_attachments(record: dict, *, label: str) -> None:
+    """Show a record's attachments after an upload, rather than the whole record."""
+    attachments = record.get("attachments") or []
+    table = Table(title=f"Attachments on {label}", show_lines=False)
+    table.add_column("ID", style="dim", justify="right")
+    table.add_column("File", style="bold")
+    table.add_column("Size", justify="right")
+    for a in attachments:
+        table.add_row(str(a.get("id", "-")), a.get("file_name") or "-", _file_size(a["file_size"]) if a.get("file_size") is not None else "-")
+    console.print(table)
+    console.print(f"{len(attachments)} attachment{'s' if len(attachments) != 1 else ''}")
 
 
 # ── Dispatcher ───────────────────────────────────────────────────────
@@ -1130,6 +1156,163 @@ def _classification_detail(r):
 _register("classification", _classification_list, _classification_detail)
 
 
+class ClassificationLine(TypedDict):
+    """One row of `GET /classifications-lines/` (the public v2 line schema)."""
+
+    id: int
+    name: str
+    is_active: bool
+    classification_id: int
+    classification_name: str
+
+
+def _classification_line_list(items: list[ClassificationLine]) -> None:
+    """Render lines with their parent classification, since the list spans all of them."""
+    table = Table(title="Classification Lines", show_lines=False)
+    table.add_column("ID", style="dim", justify="right")
+    table.add_column("Name", min_width=24, style="bold")
+    table.add_column("Classification", min_width=16)
+    table.add_column("Active")
+
+    for r in items:
+        table.add_row(
+            str(r["id"]),
+            r["name"],
+            r["classification_name"],
+            "yes" if r["is_active"] else "no",
+        )
+
+    console.print(table)
+
+
+_register("classification-line", _classification_line_list, None)
+
+
+# ── Webhook ──────────────────────────────────────────────────────────
+
+
+class Webhook(TypedDict):
+    """One webhook as `/webhooks/` returns it. `secret` is only present on create."""
+
+    uuid: str
+    url: str
+    topics: list[str]
+    is_active: bool
+    disabled_at: str | None
+    disabled_reason: str
+    created_at: str
+    last_modified_at: str
+    secret: NotRequired[str]
+
+
+class WebhookTopic(TypedDict):
+    """One entry from `/webhooks/topics/`."""
+
+    name: str
+
+
+class WebhookDelivery(TypedDict):
+    """One delivery attempt from `/webhooks/{uuid}/deliveries/`."""
+
+    event_id: str
+    topic: str
+    status: str
+    attempts: int
+    response_status: int | None
+    last_error: str
+    created_at: str
+    delivered_at: str | None
+
+
+def _webhook_state(r: Webhook, *, verbose: bool = False) -> str:
+    """
+    Active, inactive, or auto-disabled.
+
+    The verbose form adds when and why it was auto-disabled, which explains missing
+    events; the list keeps one word so the UUID and URL keep their width.
+    """
+    if r["disabled_at"]:
+        if not verbose:
+            return "[red]disabled[/red]"
+        reason = f": {r['disabled_reason']}" if r["disabled_reason"] else ""
+        return f"[red]disabled {r['disabled_at'][:10]}{reason}[/red]"
+    return "[green]active[/green]" if r["is_active"] else "[yellow]inactive[/yellow]"
+
+
+def _webhook_list(items: list[Webhook]) -> None:
+    table = Table(title="Webhooks", show_lines=False)
+    table.add_column("UUID", style="dim", no_wrap=True)
+    table.add_column("URL", style="bold", overflow="fold")
+    table.add_column("Topics", justify="right")
+    table.add_column("State", no_wrap=True)
+
+    for r in items:
+        table.add_row(r["uuid"], r["url"], str(len(r["topics"])), _webhook_state(r))
+
+    console.print(table)
+
+
+def _webhook_detail(r: Webhook) -> None:
+    header = Text()
+    header.append("WEBHOOK", style="bold")
+    header.append(f"  {r['url']}", style="bold cyan")
+    console.print(Panel(header, expand=False))
+
+    details = Table.grid(padding=(0, 2))
+    details.add_column(style="dim", min_width=16)
+    details.add_column()
+    details.add_row("UUID:", r["uuid"])
+    details.add_row("State:", _webhook_state(r, verbose=True))
+    details.add_row("Topics:", "\n".join(r["topics"]) or "[yellow]none: receives no events[/yellow]")
+    details.add_row("Created:", _local_minute(r["created_at"]))
+    details.add_row("Modified:", _local_minute(r["last_modified_at"]))
+    console.print(details)
+
+    # Create is the only response that carries the secret, and the API never returns it again.
+    if secret := r.get("secret"):
+        console.print(
+            Panel(
+                f"[bold]{secret}[/bold]\n\nSave this signing secret now. DualEntry will not show it again.",
+                title="Signing secret",
+                border_style="yellow",
+                expand=False,
+            )
+        )
+
+
+def _local_minute(iso: str) -> str:
+    """
+    Show an API timestamp in the viewer's timezone, to the minute.
+
+    The API returns UTC (`...+00:00`); cutting the string would drop the offset and
+    leave a UTC time that reads as local. A naive timestamp is shown as given.
+    """
+    moment = datetime.fromisoformat(iso)
+    if moment.tzinfo is not None:
+        moment = moment.astimezone()
+    return moment.strftime("%Y-%m-%d %H:%M")
+
+
+def _webhook_delivery_list(items: list[WebhookDelivery]) -> None:
+    table = Table(title="Webhook Deliveries", show_lines=False)
+    table.add_column("Created", style="dim", no_wrap=True)
+    table.add_column("Topic", style="bold", overflow="fold")
+    table.add_column("Status")
+    table.add_column("Tries", justify="right")
+    table.add_column("HTTP", justify="right")
+    table.add_column("Error", max_width=40)
+
+    for r in items:
+        http = str(r["response_status"]) if r["response_status"] is not None else "-"
+        table.add_row(_local_minute(r["created_at"]), r["topic"], r["status"], str(r["attempts"]), http, r["last_error"] or "-")
+
+    console.print(table)
+
+
+_register("webhook", _webhook_list, _webhook_detail)
+_register("webhook-delivery", _webhook_delivery_list, None)
+
+
 # ── Depreciation Book ────────────────────────────────────────────────
 
 
@@ -1449,7 +1632,7 @@ def _statistical_journal_list(items):
             _fmt_id(r.get("number"), "statistical-journal"),
             str(r.get("date", "-")),
             str(r.get("period", "-")),
-            r.get("account_number", "-"),
+            str(r.get("account_number") or "-"),
             _status_badge(r.get("record_status", "")),
             (r.get("memo") or "-")[:40],
         )

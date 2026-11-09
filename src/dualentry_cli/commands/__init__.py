@@ -1,16 +1,19 @@
-"""Command factory for DualEntry CLI resources."""
-
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+import shlex
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import typer
 
 from dualentry_cli.cli import HelpfulGroup, make_list_command_cls
-from dualentry_cli.client import _MAX_PAGES
-from dualentry_cli.output import _RECORD_PREFIX, format_output
+from dualentry_cli.client import _MAX_PAGES, Multipart
+from dualentry_cli.output import _NUMBER_PREFIXED, _RECORD_PREFIX, format_output, print_attachments
+
+if TYPE_CHECKING:
+    from typer.models import OptionInfo
 
 # Filter flags `list` can offer, with every option spelling each one accepts.
 FILTER_OPTIONS = {
@@ -69,6 +72,68 @@ def _supplied(value) -> str | None:
     return value if isinstance(value, str) else None
 
 
+def _parse_csv_ints(value: str) -> list[int]:
+    """
+    Parse one occurrence of a comma-separated integer filter, e.g. `3,4`.
+
+    Args:
+        value: The raw option value as typed on the command line.
+
+    Returns:
+        The integers in the order given.
+
+    Raises:
+        typer.BadParameter: If the value holds no integers, or any token is not one.
+            An empty value is rejected, not ignored: dropping the filter would
+            widen the query to every row.
+
+    """
+    tokens = [token.strip() for token in value.split(",") if token.strip()]
+    if not tokens:
+        raise typer.BadParameter("expected comma-separated integers, got an empty value")
+    ints: list[int] = []
+    for token in tokens:
+        try:
+            ints.append(int(token))
+        except ValueError as e:
+            raise typer.BadParameter(f"expected comma-separated integers, got {token!r}") from e
+    return ints
+
+
+def _flatten_csv_ints(chunks: Sequence[list[int]] | None) -> list[int] | None:
+    """
+    Merge every occurrence of a repeatable CSV option into one flat list.
+
+    Args:
+        chunks: One parsed list per occurrence of the flag, or None when it was not passed.
+
+    Returns:
+        The merged integers, or None when the flag was not passed, so the filter is omitted.
+
+    """
+    merged = [n for chunk in chunks or () for n in chunk]
+    return merged or None
+
+
+def csv_ints_option(flag: str, *, help_text: str) -> OptionInfo:
+    """
+    Build a `--flag 1,2,3` option that typer hands to the command as `list[int] | None`.
+
+    A `list[int]` annotation makes typer treat the option as repeatable and run
+    `parser` once per occurrence, which yields `[[1, 2, 3]]`. The callback flattens
+    that, so `--flag 1,2 --flag 3` also works.
+
+    Args:
+        flag: The option spelling, e.g. `"--id"`.
+        help_text: The `--help` description.
+
+    Returns:
+        The option, for use inside `Annotated[list[int] | None, ...]`.
+
+    """
+    return typer.Option(flag, parser=_parse_csv_ints, callback=_flatten_csv_ints, metavar="<ids>", help=help_text)
+
+
 def _build_filter_params(
     search: str | None = None,
     status: str | None = None,
@@ -91,8 +156,14 @@ def _build_filter_params(
     return params
 
 
-# Map _do_list filter kwargs to CLI flags for the --all resume hint.
-_FILTER_CLI_FLAGS = {
+# How a filter kwarg is spelled in the --all resume hint: a value-taking flag, or an
+# (on, off) pair for a `--x/--no-x` boolean.
+ResumeFlag = str | tuple[str, str]
+
+# Map _do_list filter kwargs to CLI flags for the --all resume hint. Commands with
+# their own filters pass a mapping of their own; a filter left out of it would be
+# missing from the hint, and the "same filters" command would return other rows.
+_FILTER_CLI_FLAGS: dict[str, ResumeFlag] = {
     "search": "--search",
     "status": "--status",
     "start_date": "--start-date",
@@ -103,19 +174,52 @@ _FILTER_CLI_FLAGS = {
 }
 
 
-def _resume_all_command(path: str, next_offset: int, filters: dict) -> str:
-    """Build a copy-paste dualentry list --all command that continues from next_offset."""
+def _resume_all_command(
+    path: str,
+    next_offset: int,
+    filters: Mapping[str, object],
+    flags: Mapping[str, ResumeFlag] = _FILTER_CLI_FLAGS,
+) -> str:
+    """
+    Build a copy-paste dualentry list --all command that continues from next_offset.
+
+    Args:
+        path: The API path, whose segments are also the CLI command path.
+        next_offset: Where the next run should start.
+        filters: The filter kwargs the truncated run used.
+        flags: How each filter kwarg is spelled on the command line.
+
+    Returns:
+        A shell-quoted command line.
+
+    """
     parts = ["dualentry", *path.split("/"), "list", "--all", "--offset", str(next_offset)]
-    for key, flag in _FILTER_CLI_FLAGS.items():
+    for key, flag in flags.items():
         value = filters.get(key)
-        if value is not None:
+        if value is None:
+            continue
+        if isinstance(flag, tuple):
+            on, off = flag
+            parts.append(on if value else off)
+        elif isinstance(value, list):
+            parts.extend([flag, ",".join(map(str, value))])
+        else:
             parts.extend([flag, str(value)])
-    return " ".join(parts)
+    return shlex.join(parts)
 
 
-def _warn_all_truncated(path: str, *, fetched_through: int, total: int, next_offset: int, filters: dict) -> None:
-    """Tell the user --all stopped early and how to continue."""
-    cmd = _resume_all_command(path, next_offset, filters)
+def _warn_all_truncated(
+    path: str,
+    *,
+    fetched_through: int,
+    total: int,
+    next_offset: int,
+    filters: Mapping[str, object],
+    flags: Mapping[str, ResumeFlag] = _FILTER_CLI_FLAGS,
+    resume: str | None = None,
+) -> None:
+    """Warn that `--all` hit the page limit; `resume` overrides the rebuilt list command."""
+    cmd = resume or _resume_all_command(path, next_offset, filters, flags)
     typer.secho(
         f"Warning: reached {fetched_through} of {total} items; stopped at the {_MAX_PAGES}-page limit.\nTo continue, re-run with the same filters:\n  {cmd}",
         fg=typer.colors.YELLOW,
@@ -123,7 +227,18 @@ def _warn_all_truncated(path: str, *, fetched_through: int, total: int, next_off
     )
 
 
-def _do_list(client, path: str, resource: str, *, limit: int, offset: int, all_pages: bool, output: str, **filters):
+def _do_list(
+    client,
+    path: str,
+    resource: str,
+    *,
+    limit: int,
+    offset: int,
+    all_pages: bool,
+    output: str,
+    resume_flags: Mapping[str, ResumeFlag] = _FILTER_CLI_FLAGS,
+    **filters,
+) -> None:
     """Shared list logic for all resources."""
     params = _build_filter_params(**filters)
     next_offset = None
@@ -142,6 +257,7 @@ def _do_list(client, path: str, resource: str, *, limit: int, offset: int, all_p
             total=data.get("count", next_offset),
             next_offset=next_offset,
             filters=filters,
+            flags=resume_flags,
         )
 
 
@@ -175,6 +291,111 @@ def _strip_to_writable(data: dict) -> dict:
     return payload
 
 
+# ── Attachment helpers ─────────────────────────────────────────────
+
+# Validate every file before upload so one bad file does not leave prior files stored.
+ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024
+_ATTACHMENT_MAX_LABEL = f"{ATTACHMENT_MAX_BYTES // 2**20} MiB"
+
+AttachmentFiles = typer.Option(
+    ...,
+    "--file",
+    "-f",
+    help=f"File to attach (max {_ATTACHMENT_MAX_LABEL}); repeat the flag for several",
+    exists=True,
+    dir_okay=False,
+    readable=True,
+)
+
+
+def _record_number_arg(value: str, resource: str) -> str:
+    """Attachment URLs use record #, not display ID (`IN-42` is rejected except `SJ-3`)."""
+    prefix = _RECORD_PREFIX.get(resource)
+    number_prefixed = resource in _NUMBER_PREFIXED
+    if number_prefixed and prefix:
+        head, sep, rest = value.partition("-")
+        if sep and head.upper() == prefix:
+            value = rest
+    # isascii(): str.isdigit() also accepts "²" and "٤٢", which no record URL matches.
+    if value.isascii() and value.isdigit():
+        return value
+    raise typer.BadParameter(f"expected a record number{_record_number_hint(resource)}, got {value!r}", param_hint="'NUMBER'")
+
+
+def _record_number_hint(resource: str) -> str:
+    """Suffix for a bad record-number error."""
+    prefix = _RECORD_PREFIX.get(resource)
+    if not prefix:
+        return " from the # column"
+    if resource in _NUMBER_PREFIXED:
+        return f" such as 3 or {prefix}-3"
+    return f" from the # column (not the {prefix}-… ID)"
+
+
+def _read_attachment(path: Path) -> bytes:
+    """Read one `--file`; reject empty or over limit (read stops at limit+1 byte)."""
+    with path.open("rb") as fh:
+        content = fh.read(ATTACHMENT_MAX_BYTES + 1)
+    if not content:
+        raise typer.BadParameter(f"{path} is empty", param_hint="'--file'")
+    if len(content) > ATTACHMENT_MAX_BYTES:
+        raise typer.BadParameter(f"{path} is over the {_ATTACHMENT_MAX_LABEL} limit", param_hint="'--file'")
+    return content
+
+
+def _read_attachments(files: Sequence[Path]) -> Multipart:
+    """Read all `--file` paths in order; fail before POST if any file is invalid."""
+    contents = [_read_attachment(path) for path in files]
+    return [("files", (path.name, content)) for path, content in zip(files, contents, strict=True)]
+
+
+def _upload_attachments(
+    path: str,
+    resource: str,
+    number: str,
+    files: Sequence[Path],
+    output: str,
+    *,
+    replace: bool,
+) -> None:
+    from dualentry_cli.main import get_client
+
+    record_number = _record_number_arg(number, resource)
+    multipart = _read_attachments(files)
+    route = "attachments/replace/" if replace else "attachments/"
+    data = get_client().post(f"/{path}/{record_number}/{route}", files=multipart)
+    if output == "json":
+        format_output(data, resource=resource, fmt=output)
+    else:
+        print_attachments(data, label=f"{resource.replace('-', ' ')} {record_number}")
+
+
+def _add_attachment_commands(app: typer.Typer, path: str, resource: str, *, replace: bool) -> None:
+    """Add `add-attachments` and optionally `replace-attachments` to a resource app."""
+    prefix = _RECORD_PREFIX.get(resource)
+    number_help = f"Record number (the # column), e.g. 3 or {prefix}-3" if resource in _NUMBER_PREFIXED and prefix else "Record number (the # column)"
+
+    @app.command("add-attachments")
+    def add_attachments_cmd(
+        number: str = typer.Argument(help=number_help),
+        file: list[Path] = AttachmentFiles,
+        output: str = Format,
+    ) -> None:
+        """Attach file(s) to a record, keeping its existing attachments."""
+        _upload_attachments(path, resource, number, file, output, replace=False)
+
+    if replace:
+
+        @app.command("replace-attachments")
+        def replace_attachments_cmd(
+            number: str = typer.Argument(help=number_help),
+            file: list[Path] = AttachmentFiles,
+            output: str = Format,
+        ) -> None:
+            """Replace all attachments on a record. Its current attachments are deleted."""
+            _upload_attachments(path, resource, number, file, output, replace=True)
+
+
 # ── Factory ─────────────────────────────────────────────────────────
 
 
@@ -189,6 +410,8 @@ def make_resource_app(
     has_delete: bool = False,
     has_number: bool = False,
     has_post: bool = False,
+    has_attachments: bool = False,
+    has_replace_attachments: bool = False,
     filters: set[str],
     status_param: str = "record_status",
     template: dict | None = None,
@@ -200,6 +423,9 @@ def make_resource_app(
 
     `filters` lists the flags this resource's v2 list endpoint declares; the rest
     are removed from `list` so the API cannot silently drop them.
+
+    `has_attachments` and `has_replace_attachments` mirror the v2 routes
+    `POST /{number}/attachments/` and `POST /{number}/attachments/replace/`.
     """
     import inspect
 
@@ -207,6 +433,12 @@ def make_resource_app(
     unknown = filters - ALL_FILTERS
     if unknown:
         msg = f"{name}: unknown filter flags {sorted(unknown)}"
+        raise ValueError(msg)
+    if has_replace_attachments and not has_attachments:
+        msg = f"{name}: has_replace_attachments requires has_attachments"
+        raise ValueError(msg)
+    if has_attachments and not has_number:
+        msg = f"{name}: has_attachments requires has_number (attachment routes take the record number)"
         raise ValueError(msg)
     remove = ALL_FILTERS - filters
 
@@ -425,6 +657,9 @@ def make_resource_app(
             format_output(result, resource=resource, fmt=output)
 
         post_cmd.__doc__ = f"Post a draft {resource}."
+
+    if has_attachments:
+        _add_attachment_commands(app, path, resource, replace=has_replace_attachments)
 
     if template is not None:
 
