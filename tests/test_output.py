@@ -120,3 +120,23 @@ class TestTruncatedLinesWarning:
         assert payload["lines_count"] == 250
         assert "Warning:" not in captured.out
         assert captured.err == ""
+
+
+class TestClassificationLineList:
+    def test_shows_parent_classification_and_active_flag(self, capsys):
+        from dualentry_cli.output import format_output
+
+        data = {
+            "items": [
+                {"id": 7, "name": "East", "is_active": True, "classification_id": 3, "classification_name": "Region"},
+                {"id": 8, "name": "Legacy", "is_active": False, "classification_id": 3, "classification_name": "Region"},
+            ],
+            "count": 2,
+        }
+        format_output(data, resource="classification-line")
+        out = capsys.readouterr().out
+        assert "Classification Lines" in out
+        assert "East" in out
+        assert "Region" in out
+        assert "yes" in out
+        assert "no" in out

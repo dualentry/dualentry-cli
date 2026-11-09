@@ -1,0 +1,20 @@
+name: Artifacts
+
+on:
+  pull_request:
+    branches: [main]
+    # `edited` re-runs the check when the description changes.
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+
+jobs:
+  artifacts:
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-artifacts') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # Passed through env, never interpolated into the script.
+      - env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: python3 scripts/check_artifacts.py "origin/${{ github.base_ref }}"
