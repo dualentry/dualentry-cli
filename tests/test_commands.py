@@ -245,11 +245,107 @@ class TestParityResourceCommands:
         assert kwargs["files"][0][0] == "files"
         assert kwargs["files"][0][1][0] == "note.txt"
 
+    def test_statistical_journal_csv_ids_are_sent_as_a_flat_list(self, mock_get_client):
+        mock_get_client.get.return_value = {"items": [], "count": 0}
+        result = runner.invoke(app, ["statistical-journals", "list", "--number", "1,2", "--number", "3", "--account-id", "5"])
+        assert result.exit_code == 0
+        mock_get_client.get.assert_called_once_with(
+            "/statistical-journals/",
+            params={"number": [1, 2, 3], "account_id": [5], "limit": 20, "offset": 0},
+        )
+
     def test_statistical_journal_list_rejects_non_integer_csv(self):
         result = runner.invoke(app, ["statistical-journals", "list", "--number", "1,abc"])
         assert result.exit_code == 2
         assert "comma-separated integers" in result.output
         assert "abc" in result.output
+
+    def test_statistical_journal_list_renders_an_integer_account_number(self, mock_get_client):
+        # The API sends account_number as an int; rich refuses to render a bare int.
+        mock_get_client.get.return_value = {
+            "items": [
+                {
+                    "number": 1,
+                    "date": "2026-08-12",
+                    "period": "2026-08-01",
+                    "account_number": 90100,
+                    "record_status": "posted",
+                    "memo": "",
+                },
+            ],
+            "count": 1,
+        }
+        result = runner.invoke(app, ["statistical-journals", "list"])
+        assert result.exit_code == 0, result.output
+        assert "90100" in result.output
+
+
+class TestClassificationsLinesCommands:
+    def test_list_with_no_filters(self, mock_get_client):
+        mock_get_client.get.return_value = {"items": [], "count": 0}
+        result = runner.invoke(app, ["classifications-lines", "list"])
+        assert result.exit_code == 0
+        mock_get_client.get.assert_called_once_with("/classifications-lines/", params={"limit": 20, "offset": 0})
+
+    def test_every_filter_maps_to_its_api_name(self, mock_get_client):
+        mock_get_client.get.return_value = {"items": [], "count": 0}
+        result = runner.invoke(
+            app,
+            ["classifications-lines", "list", "--search", "east", "--classification", "3,4", "--id", "7", "--name", "Eas", "--active"],
+        )
+        assert result.exit_code == 0
+        mock_get_client.get.assert_called_once_with(
+            "/classifications-lines/",
+            params={
+                "search": "east",
+                "classification_id": [3, 4],
+                "id": [7],
+                "name": "Eas",
+                "is_active": True,
+                "limit": 20,
+                "offset": 0,
+            },
+        )
+
+    def test_inactive_sends_false_rather_than_dropping_the_filter(self, mock_get_client):
+        mock_get_client.get.return_value = {"items": [], "count": 0}
+        result = runner.invoke(app, ["classifications-lines", "list", "--inactive"])
+        assert result.exit_code == 0
+        mock_get_client.get.assert_called_once_with("/classifications-lines/", params={"is_active": False, "limit": 20, "offset": 0})
+
+    @pytest.mark.parametrize("flag", ["--classification", "--id"])
+    @pytest.mark.parametrize("value", ["3,abc", "", ",", " , "])
+    def test_id_filters_reject_bad_or_empty_input_before_calling_the_api(self, flag, value, mock_get_client):
+        result = runner.invoke(app, ["classifications-lines", "list", flag, value])
+        assert result.exit_code == 2
+        assert "comma-separated integers" in result.output
+        mock_get_client.get.assert_not_called()
+
+    def test_repeated_id_flags_merge(self, mock_get_client):
+        mock_get_client.get.return_value = {"items": [], "count": 0}
+        result = runner.invoke(app, ["classifications-lines", "list", "--id", "1,2", "--id", "3"])
+        assert result.exit_code == 0
+        mock_get_client.get.assert_called_once_with("/classifications-lines/", params={"id": [1, 2, 3], "limit": 20, "offset": 0})
+
+    def test_empty_name_is_not_sent(self, mock_get_client):
+        mock_get_client.get.return_value = {"items": [], "count": 0}
+        result = runner.invoke(app, ["classifications-lines", "list", "--name", ""])
+        assert result.exit_code == 0
+        mock_get_client.get.assert_called_once_with("/classifications-lines/", params={"limit": 20, "offset": 0})
+
+    def test_all_truncation_hint_repeats_every_filter(self, mock_get_client):
+        mock_get_client.paginate.return_value = {
+            "items": [{"id": 1, "name": "East", "is_active": False, "classification_id": 3, "classification_name": "Region"}],
+            "count": 250000,
+            "next_offset": 100000,
+        }
+        result = runner.invoke(
+            app,
+            ["classifications-lines", "list", "--all", "--search", "north east", "--classification", "3,4", "--id", "7", "--name", "Eas", "--inactive"],
+        )
+        assert result.exit_code == 0
+        hint = result.output.splitlines()[-1].strip()
+        assert hint == ("dualentry classifications-lines list --all --offset 100000 --search 'north east' --classification 3,4 --id 7 --name Eas --inactive")
 
 
 class TestUnknownCommandSuggestions:
@@ -309,6 +405,25 @@ class TestListAllTruncation:
 
         cmd = _resume_all_command("recurring/invoices", 200, {"status": "posted"})
         assert cmd == "dualentry recurring invoices list --all --offset 200 --status posted"
+
+    @pytest.mark.parametrize(("value", "expected"), [(True, "--active"), (False, "--inactive")])
+    def test_resume_command_spells_boolean_filters_as_on_off_flags(self, value, expected):
+        from dualentry_cli.commands import _resume_all_command
+
+        cmd = _resume_all_command("classifications-lines", 10, {"is_active": value}, {"is_active": ("--active", "--inactive")})
+        assert cmd == f"dualentry classifications-lines list --all --offset 10 {expected}"
+
+    def test_resume_command_quotes_values_with_spaces(self):
+        from dualentry_cli.commands import _resume_all_command
+
+        cmd = _resume_all_command("invoices", 10, {"search": "acme corp"})
+        assert cmd == "dualentry invoices list --all --offset 10 --search 'acme corp'"
+
+    def test_statistical_journals_hint_keeps_their_own_filters(self, mock_get_client):
+        mock_get_client.paginate.return_value = {"items": [], "count": 250000, "next_offset": 100000}
+        result = runner.invoke(app, ["statistical-journals", "list", "--all", "--number", "1,2", "--date-start", "2025-01-01"])
+        assert result.exit_code == 0
+        assert "--date-start 2025-01-01 --number 1,2" in result.output
 
     def test_complete_all_does_not_warn(self, mock_get_client):
         mock_get_client.paginate.return_value = {
