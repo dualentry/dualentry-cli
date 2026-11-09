@@ -89,7 +89,7 @@ dualentry export-jobs wait 42 --interval 10 --timeout 1800
 dualentry webhooks topics
 
 # Register an endpoint; save the signing secret it prints, it is shown only once
-dualentry webhooks create --url https://hooks.example.com/dualentry -t invoice.created -t bill.posted
+dualentry webhooks create --url https://hooks.example.com/dualentry -t core.classification/created -t core.account/created
 
 # Check what was delivered, and re-enable a webhook that was auto-disabled after failures
 dualentry webhooks deliveries 3f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6b

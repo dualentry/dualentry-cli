@@ -1,5 +1,3 @@
-"""Command factory for DualEntry CLI resources."""
-
 from __future__ import annotations
 
 import json
@@ -220,20 +218,7 @@ def _warn_all_truncated(
     flags: Mapping[str, ResumeFlag] = _FILTER_CLI_FLAGS,
     resume: str | None = None,
 ) -> None:
-    """
-    Tell the user --all stopped early and how to continue.
-
-    Args:
-        path: The API path, used to rebuild the command when `resume` is not given.
-        fetched_through: How many items the run reached.
-        total: The API's total count.
-        next_offset: Where the next run should start.
-        filters: The filter kwargs the truncated run used.
-        flags: How each filter kwarg is spelled on the command line.
-        resume: A ready-made resume command, for commands whose CLI shape is not
-            `<api path> list` (e.g. `webhooks deliveries <uuid>`).
-
-    """
+    """Warn that `--all` hit the page limit; `resume` overrides the rebuilt list command."""
     cmd = resume or _resume_all_command(path, next_offset, filters, flags)
     typer.secho(
         f"Warning: reached {fetched_through} of {total} items; stopped at the {_MAX_PAGES}-page limit.\nTo continue, re-run with the same filters:\n  {cmd}",

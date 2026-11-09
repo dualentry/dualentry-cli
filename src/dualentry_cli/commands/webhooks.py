@@ -1,11 +1,3 @@
-"""
-Webhook commands: register endpoints, choose topics, and read delivery history.
-
-Webhooks are addressed by UUID, not by a record number, and `/topics/` returns a
-bare list rather than a page, so these commands are hand-written instead of
-coming from the resource factory.
-"""
-
 from __future__ import annotations
 
 import json
