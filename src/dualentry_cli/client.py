@@ -12,33 +12,22 @@ import httpx
 
 from dualentry_cli import USER_AGENT
 
-# Status codes that should be retried (transient errors)
 _RETRYABLE_STATUS_CODES = {429, 502, 503, 504}
-# Transient transport failures. Deliberately excludes LocalProtocolError,
-# UnsupportedProtocol, DecodingError and TooManyRedirects: those fail the same
-# way every time, so retrying only delays the error the user needs to see.
+# Only errors that might succeed on retry (not protocol/decoding/redirect failures).
 _RETRYABLE_EXCEPTIONS = (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError)
-_RETRY_DELAYS = [1, 2, 4]  # Exponential backoff: 1s, 2s, 4s
+_RETRY_DELAYS = [1, 2, 4]
 _MAX_RETRIES = len(_RETRY_DELAYS)
 
-# The API replays the original response for a repeated Idempotency-Key instead of
-# running the operation again, so a retried write cannot create a duplicate record.
-# https://docs.dualentry.com/developers/release-notes/2026-08-12
 _IDEMPOTENCY_HEADER = "Idempotency-Key"
 _IDEMPOTENCY_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
-# 429 and the in-flight 409 both report exactly how long to wait.
-# https://docs.dualentry.com/developers/guides/rate-limiting
 _RETRY_AFTER_HEADER = "Retry-After"
-
 _MAX_RETRY_AFTER = 60
 
-# One `("files", (filename, content))` part per upload. Bytes, not open files: a
-# retried request resends these parts, and a file handle would already be spent.
+# Upload part: filename + bytes (not an open file), safe to resend on 429 retry.
 Multipart: TypeAlias = list[tuple[str, tuple[str, bytes]]]
 
-# Hard ceiling for --all crawls: page_size 100 x 1000 pages = 100_000 items.
-# Truncation must warn; never report the truncated length as the API total.
+# Max pages for `list --all` (100 items x 1000 pages).
 _MAX_PAGES = 1000
 
 
@@ -48,7 +37,6 @@ def _retry_after_seconds(response: httpx.Response) -> int | None:
     if raw is None:
         return None
     try:
-        # RFC 9110 delay-seconds is a non-negative integer
         seconds = int(raw.strip())
     except (TypeError, ValueError):
         return None
@@ -56,14 +44,7 @@ def _retry_after_seconds(response: httpx.Response) -> int | None:
 
 
 def _is_retryable(response: httpx.Response) -> bool:
-    """
-    Whether this response should be retried with the same idempotency key.
-
-    409 means two different things, told apart by Retry-After:
-    with the header the first request is still running and we should retry;
-    without it the original response was too large to store, the write did not run again
-    https://docs.dualentry.com/developers/guides/idempotency-and-write-validation
-    """
+    """Retry 429/5xx; retry 409 only when Retry-After means the first write is still running."""
     if response.status_code == 409:
         return _RETRY_AFTER_HEADER in response.headers
     return response.status_code in _RETRYABLE_STATUS_CODES
@@ -177,14 +158,11 @@ class DualEntryClient:
 
     def _request(self, method: str, path: str, **kwargs) -> dict:
         method = method.upper()
-        # The API rejects an Idempotency-Key on non-JSON bodies, so multipart uploads
-        # go unkeyed. Without a key, only a 429 proves the write did not run; a network
-        # error or 5xx may follow a completed upload, so those are not retried.
+        # Multipart POST cannot send Idempotency-Key; only retry 429, not 5xx/network.
         unkeyed_write = method in _IDEMPOTENCY_METHODS and "files" in kwargs
         keyed = method in _IDEMPOTENCY_METHODS and not unkeyed_write
         if keyed:
-            # One key per logical request, deliberately generated here rather than
-            # per attempt: reusing it across retries is what makes a retry safe.
+            # Same key on every attempt so a retried JSON write stays idempotent.
             headers = dict(kwargs.pop("headers", None) or {})
             headers.setdefault(_IDEMPOTENCY_HEADER, str(uuid.uuid4()))
             kwargs["headers"] = headers
@@ -193,7 +171,6 @@ class DualEntryClient:
             response = self._client.request(method, path, **kwargs)
             return self._handle_response(response, sent_idempotency_key=keyed)
 
-        # Retry logic with visible feedback
         for attempt, backoff in enumerate(_RETRY_DELAYS):
             retry_after = None
             try:
@@ -208,12 +185,10 @@ class DualEntryClient:
                 if unkeyed_write:
                     raise
 
-            # every retry waits, including the one after the loop
             delay = retry_after if retry_after is not None else backoff
             print(f"\033[33mRetrying in {delay}s... (attempt {attempt + 2}/{_MAX_RETRIES + 1})\033[0m", file=sys.stderr)
             time.sleep(delay)
 
-        # Final attempt
         response = self._client.request(method, path, **kwargs)
         return self._handle_response(response, sent_idempotency_key=keyed)
 
@@ -229,13 +204,7 @@ class DualEntryClient:
         *,
         start_offset: int = 0,
     ) -> dict:
-        """
-        Fetch pages and return {items, count, next_offset?}.
-
-        ``count`` is always the API total, regardless of truncation.
-        When the page ceiling (or ``max_items``) stops the crawl early,
-        ``next_offset`` is set so callers can resume.
-        """
+        """Return {items, count, next_offset?}. ``count`` is the API total even when truncated."""
         params = dict(params or {})
         params["limit"] = page_size
         params["offset"] = start_offset
