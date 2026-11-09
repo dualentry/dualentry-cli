@@ -156,7 +156,6 @@ jobs:
 
   # Ask the docs repo to write release notes for this version, the same
   # repository_dispatch that backend and frontend send through release-cycle.
-  # Runs once the binaries are uploaded; a failure here doesn't fail the release.
   notify-docs:
     needs: upload
     if: ${{ !github.event.release.prerelease }}
