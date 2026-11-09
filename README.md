@@ -114,6 +114,7 @@ dualentry webhooks update 3f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6b --active
 | **Payables** | Bills, Purchase Orders, Vendor Payments, Credits, Refunds |
 | **Accounting** | Journal Entries, Bank Transfers, Fixed Assets, Depreciation |
 | **Master Data** | Customers, Vendors, Items, Accounts, Classifications, Classification Lines |
+| **Tax** | VAT Rates, GST Tax Rates, Product Tax Codes |
 | **Automation** | Recurring Invoices, Recurring Bills, Workflows, Contracts |
 | **Close Management** | Bank Match |
 | **Bank Feeds** | Bank Connections |

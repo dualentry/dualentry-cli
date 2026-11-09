@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Add `gst-tax-rates` commands (`list`, `get`) to look up the `gst_tax_rate_id` for line items, filterable by `--country`, `--treatment`, `--active/--inactive`, and `--updated-after/--updated-before`. Rates show as percentages, with the component split for rates such as CGST + SGST
 - Add `webhooks` commands (`topics`, `list`, `get`, `create`, `update`, `delete`, `deliveries`) to manage webhooks and read their delivery history. `create` shows the signing secret once, and warns when a webhook has no topics
 - Add `classifications-lines list` to list classification values across all classifications, filterable by `--classification`, `--id`, `--name`, and `--active/--inactive`
 - Fix `statistical-journals list` sending comma-separated ID filters (`--number`, `--account-id`, `--line-account-id`) in a form the API could not read
