@@ -1,10 +1,3 @@
-"""
-GST tax rate commands (read-only), for looking up the `gst_tax_rate_id` a line item needs.
-
-The list endpoint filters by country, treatment, and active state, which the resource
-factory's shared flags can't express, so this module defines its own `list`.
-"""
-
 from __future__ import annotations
 
 from datetime import datetime
@@ -42,20 +35,7 @@ class GstTreatment(StrEnum):
 
 
 def _aware_timestamp(value: str | None) -> str | None:
-    """
-    Check an `--updated-*` value is an ISO 8601 timestamp with a timezone.
-
-    Args:
-        value: The option value, or None when the flag was not passed.
-
-    Returns:
-        The value unchanged, for the API to parse.
-
-    Raises:
-        typer.BadParameter: If it isn't ISO 8601, or has no timezone. The API rejects
-            naive timestamps, and the CLI can say why more clearly than a 422.
-
-    """
+    """Reject naive or malformed `--updated-*` values before the API sees them."""
     if value is None:
         return None
     try:
