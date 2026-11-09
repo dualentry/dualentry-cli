@@ -6,6 +6,9 @@
 - Fix `statistical-journals list` sending comma-separated ID filters (`--number`, `--account-id`, `--line-account-id`) in a form the API could not read
 - Comma-separated ID filters now reject an empty value instead of silently listing every row, and can be repeated (`--id 1,2 --id 3`)
 - The `list --all` resume hint now repeats every filter of commands with their own filters, and shell-quotes values with spaces
+- Add `add-attachments` to the 13 transaction types whose API accepts file uploads, and `replace-attachments` to invoices. Files are checked against the 10 MiB limit before anything is sent
+- Fix attachment uploads failing with "Idempotency-Key is only supported on JSON requests". Uploads are sent without the key and retried only after a 429, so a retry cannot attach files twice
+- `statistical-journals add-attachments` now checks the 10 MiB limit before uploading, rejects folders, and rejects prefixes other than `SJ-`
 - Line-item tables label the quantity column Quantity
 - Update the CLI greeting logo to DualEntry
 - Add `export-jobs` commands (`create`, `list`, `get`, `wait`) for on-demand destination data refreshes via the public API

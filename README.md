@@ -63,6 +63,16 @@ dualentry invoices create --file invoice.json
 dualentry journal-entries list --start-date 2025-01-01 --end-date 2025-03-31 --format json
 ```
 
+### Attach a receipt to a bill
+
+```bash
+# Pass the record number from the # column; repeat -f for several files (10 MiB max each)
+dualentry bills add-attachments 1042 -f receipt.pdf -f approval.eml
+
+# Invoices can also swap out every attachment at once
+dualentry invoices replace-attachments 318 -f signed-invoice.pdf
+```
+
 ### Automate in CI/CD
 
 Set `X_API_KEY` in your environment for non-interactive authentication:
@@ -97,6 +107,7 @@ dualentry export-jobs wait 42 --interval 10 --timeout 1800
 
 Most resources support `list`, `get`, `create`, and `update`; some (e.g. Bank Connections, Bank Match) expose a different verb set — see `--help`.
 Export jobs support `create`, `list`, `get`, and `wait` (poll until finished).
+Transactions that accept files support `add-attachments` (see `dualentry <resource> --help`); invoices also support `replace-attachments`.
 
 ## Output Formats
 
