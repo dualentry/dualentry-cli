@@ -154,3 +154,34 @@ jobs:
             echo "::warning::Could not merge or enable auto-merge for $PR_URL — merge it manually."
           fi
 
+  # Ask the docs repo to write release notes for this version, the same
+  # repository_dispatch that backend and frontend send through release-cycle.
+  # Runs once the binaries are uploaded; a failure here doesn't fail the release.
+  notify-docs:
+    needs: upload
+    if: ${{ !github.event.release.prerelease }}
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions: {}
+    steps:
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.DUALENTRY_CI_APP_CLIENT_ID }}
+          private-key: ${{ secrets.DUALENTRY_CI_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: docs
+          permission-contents: write
+
+      - name: Send release to dualentry/docs
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          gh api --method POST repos/dualentry/docs/dispatches \
+            -f event_type=release \
+            -f 'client_payload[repo]=dualentry-cli' \
+            -f "client_payload[release_tag]=$RELEASE_TAG"
+          echo "Sent release $RELEASE_TAG to dualentry/docs"
