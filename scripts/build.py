@@ -33,9 +33,6 @@ def main():
                 "dualentry",
                 "--strip",
                 "--noconfirm",
-                # Shell completion detects the shell through shellingham, which
-                # imports its per-OS module (shellingham.posix / shellingham.nt)
-                # by name at runtime, so PyInstaller can't see it on its own.
                 "--collect-submodules",
                 "shellingham",
                 str(ROOT / "src" / "dualentry_cli" / "main.py"),
