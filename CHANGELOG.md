@@ -14,6 +14,7 @@
 - Line-item tables label the quantity column Quantity
 - Update the CLI greeting logo to DualEntry
 - Add `export-jobs` commands (`create`, `list`, `get`, `wait`) for on-demand destination data refreshes via the public API
+- Fix `dualentry --install-completion` and `--show-completion` failing with "Shell detection not implemented for 'posix'" in the released binaries
 
 ## [0.1.18] - 2026-09-01
 

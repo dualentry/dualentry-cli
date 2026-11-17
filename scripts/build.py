@@ -33,6 +33,8 @@ def main():
                 "dualentry",
                 "--strip",
                 "--noconfirm",
+                "--collect-submodules",
+                "shellingham",
                 str(ROOT / "src" / "dualentry_cli" / "main.py"),
             ],
             cwd=str(ROOT),
