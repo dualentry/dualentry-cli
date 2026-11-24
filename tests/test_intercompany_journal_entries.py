@@ -23,6 +23,7 @@ class TestIJEFormatting:
             "items": [
                 {
                     "internal_id": 100,
+                    "code": "IJE-100",
                     "record_number": 42,
                     "date": "2026-04-20",
                     "memo": "IC transfer",
@@ -51,6 +52,7 @@ class TestIJEFormatting:
     def test_ije_detail_shows_lines_with_company(self, capsys):
         data = {
             "internal_id": 100,
+            "code": "IJE-100",
             "record_number": 42,
             "date": "2026-04-20",
             "transaction_date": "2026-04-20",
@@ -105,6 +107,7 @@ class TestIJECommands:
             "items": [
                 {
                     "internal_id": 100,
+                    "code": "IJE-100",
                     "record_number": 42,
                     "date": "2026-04-20",
                     "memo": "IC transfer",
@@ -124,6 +127,7 @@ class TestIJECommands:
     def test_get_by_number(self, mock_get_client):
         mock_get_client.get.return_value = {
             "internal_id": 100,
+            "code": "IJE-100",
             "record_number": 42,
             "date": "2026-04-20",
             "memo": "IC transfer",
@@ -161,6 +165,7 @@ class TestIJECommands:
         data_file.write_text(json.dumps(payload))
         mock_get_client.put.return_value = {
             "internal_id": 100,
+            "code": "IJE-100",
             "record_number": 42,
             "date": "2026-04-20",
             "memo": "updated",
@@ -237,6 +242,7 @@ class TestIJEPost:
     def test_post_draft_to_posted(self, mock_get_client):
         draft_response = {
             "internal_id": 100,
+            "code": "IJE-100",
             "record_number": 42,
             "date": "2026-04-20",
             "transaction_date": "2026-04-20",
@@ -272,6 +278,7 @@ class TestIJEPost:
     def test_post_already_posted_fails(self, mock_get_client):
         mock_get_client.get.return_value = {
             "internal_id": 100,
+            "code": "IJE-100",
             "record_number": 42,
             "date": "2026-04-20",
             "memo": "IC transfer",
@@ -287,6 +294,7 @@ class TestIJEPost:
     def test_post_archived_fails(self, mock_get_client):
         mock_get_client.get.return_value = {
             "internal_id": 100,
+            "code": "IJE-100",
             "record_number": 42,
             "date": "2026-04-20",
             "memo": "IC transfer",
@@ -332,6 +340,7 @@ class TestIJETemplate:
 
 _DRAFT_RESPONSE = {
     "internal_id": 200,
+    "code": "IJE-200",
     "record_number": 55,
     "date": "2026-05-01",
     "transaction_date": "2026-05-01",

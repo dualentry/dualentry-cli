@@ -155,9 +155,9 @@ class TestRejectedBeforeAnyUpload:
         assert result.exit_code == 2
         mock_get_client.post.assert_not_called()
 
-    def test_prefixed_id_error_names_the_resource_prefix(self, receipt):
+    def test_prefixed_id_error_points_to_the_number_column(self, receipt):
         result = runner.invoke(app, ["invoices", "add-attachments", "IN-42", "--file", str(receipt)])
-        assert "(not the IN-… ID)" in _flat(result.output)
+        assert "from the # column (not the display ID)" in _flat(result.output)
 
     def test_empty_file(self, tmp_path, mock_get_client):
         empty = tmp_path / "empty.pdf"

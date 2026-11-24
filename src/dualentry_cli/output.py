@@ -14,45 +14,18 @@ from rich.text import Text
 
 console = Console()
 
-# Resource name → display prefix (e.g. "invoice" → "IN")
-_RECORD_PREFIX: dict[str, str] = {
-    "invoice": "IN",
-    "bill": "BI",
-    "sales-order": "SO",
-    "purchase-order": "PO",
-    "customer-payment": "CP",
-    "customer-credit": "CC",
-    "customer-prepayment": "CPP",
-    "customer-prepayment-application": "CPA",
-    "customer-deposit": "CD",
-    "customer-refund": "CR",
-    "cash-sale": "CS",
-    "direct-expense": "DE",
-    "vendor-payment": "VP",
-    "vendor-credit": "VC",
-    "vendor-prepayment": "VPP",
-    "vendor-prepayment-application": "VPA",
-    "vendor-refund": "VR",
-    "journal-entry": "JE",
-    "intercompany-journal-entry": "IJE",
-    "bank-transfer": "BT",
-    "fixed-asset": "FA",
-    "statistical-journal": "SJ",
-}
-
-# Resources whose prefixed display ID wraps the record number (SJ-3 is number 3).
-# Every other prefix wraps the internal ID, which record URLs do not accept.
-_NUMBER_PREFIXED: frozenset[str] = frozenset({"statistical-journal"})
+# Statistical journals have no API `code`; the UI shows SJ-<number>, and that number is what record URLs take.
+_NUMBER_PREFIXED: dict[str, str] = {"statistical-journal": "SJ"}
 
 
-def _fmt_id(record_id, resource: str = "") -> str:
-    """Format a record ID with its prefix, e.g. 135934 → IN-135934 (matches UI display)."""
-    if record_id is None:
-        return "-"
-    prefix = _RECORD_PREFIX.get(resource, "")
-    if prefix:
-        return f"{prefix}-{record_id}"
-    return str(record_id)
+def _fmt_id(record: dict, resource: str = "") -> str:
+    """Display ID: the API's `code` (as the UI shows it), else the bare internal ID."""
+    if record.get("code"):
+        return record["code"]
+    if resource in _NUMBER_PREFIXED and record.get("number") is not None:
+        return f"{_NUMBER_PREFIXED[resource]}-{record['number']}"
+    record_id = record.get("internal_id")
+    return "-" if record_id is None else str(record_id)
 
 
 def format_output(data: dict, resource: str = "generic", fmt: str = "human") -> None:
@@ -151,7 +124,7 @@ def _transaction_list(
     resource: str = "",
 ):
     table = Table(title=title, show_lines=False)
-    table.add_column("ID", style="dim", justify="right")
+    table.add_column("ID", style="dim", justify="right", no_wrap=True)
     table.add_column("#", style="bold", justify="right")
     table.add_column("Date", justify="center")
     table.add_column("Company")
@@ -172,7 +145,7 @@ def _transaction_list(
     for r in items:
         currency = r.get("currency_iso_4217_code", "")
         row = [
-            _fmt_id(r.get("internal_id"), resource),
+            _fmt_id(r, resource),
             str(r.get("number", "")),
             r.get("date", "-"),
             r.get("company_name", "-"),
@@ -213,7 +186,7 @@ def _transaction_detail(
 
     header = Text()
     header.append(record_type.upper(), style="bold")
-    header.append(f"  {_fmt_id(record.get('internal_id'), resource)}", style="bold cyan")
+    header.append(f"  {_fmt_id(record, resource)}", style="bold cyan")
     status = record.get("record_status", "")
     if status:
         header.append(f"  {status.upper()}", style=_status_color(status))
@@ -548,7 +521,7 @@ def _journal_entry_detail(r):
 
     header = Text()
     header.append("JOURNAL ENTRY", style="bold")
-    header.append(f"  {_fmt_id(r.get('internal_id'), 'journal-entry')}", style="bold cyan")
+    header.append(f"  {_fmt_id(r, 'journal-entry')}", style="bold cyan")
     status = r.get("record_status", "")
     if status:
         header.append(f"  {status.upper()}", style=_status_color(status))
@@ -595,7 +568,7 @@ _register("journal-entry", _journal_entry_list, _journal_entry_detail)
 
 def _ije_list(items):
     table = Table(title="Intercompany Journal Entries", show_lines=False)
-    table.add_column("ID", style="dim", justify="right")
+    table.add_column("ID", style="dim", justify="right", no_wrap=True)
     table.add_column("#", style="bold", justify="right")
     table.add_column("Date", justify="center")
     table.add_column("Companies", min_width=20)
@@ -611,7 +584,7 @@ def _ije_list(items):
         memo = r.get("memo", "") or ""
         amount = sum(float(item.get("debit") or 0) for item in r.get("items", []))
         table.add_row(
-            _fmt_id(r.get("internal_id"), "intercompany-journal-entry"),
+            _fmt_id(r, "intercompany-journal-entry"),
             str(r.get("record_number", "")),
             r.get("date", "-"),
             company_names,
@@ -629,7 +602,7 @@ def _ije_detail(r):
 
     header = Text()
     header.append("INTERCOMPANY JOURNAL ENTRY", style="bold")
-    header.append(f"  {_fmt_id(r.get('internal_id'), 'intercompany-journal-entry')}", style="bold cyan")
+    header.append(f"  {_fmt_id(r, 'intercompany-journal-entry')}", style="bold cyan")
     status = r.get("record_status", "")
     if status:
         header.append(f"  {status.upper()}", style=_status_color(status))
@@ -691,7 +664,7 @@ _register("intercompany-journal-entry", _ije_list, _ije_detail)
 
 def _bank_transfer_list(items):
     table = Table(title="Bank Transfers", show_lines=False)
-    table.add_column("#", style="bold", justify="right")
+    table.add_column("#", style="bold", justify="right", no_wrap=True)
     table.add_column("Date", justify="center")
     table.add_column("Company")
     table.add_column("From Account", min_width=14)
@@ -704,7 +677,7 @@ def _bank_transfer_list(items):
         send_currency = r.get("credit_bank_account_currency", "")
         recv_currency = r.get("debit_bank_account_currency", "")
         table.add_row(
-            _fmt_id(r.get("internal_id"), "bank-transfer"),
+            _fmt_id(r, "bank-transfer"),
             r.get("date", "-"),
             r.get("company_name", "-"),
             r.get("credit_bank_account_name", "-"),
@@ -720,7 +693,7 @@ def _bank_transfer_list(items):
 def _bank_transfer_detail(r):
     header = Text()
     header.append("BANK TRANSFER", style="bold")
-    header.append(f"  {_fmt_id(r.get('internal_id'), 'bank-transfer')}", style="bold cyan")
+    header.append(f"  {_fmt_id(r, 'bank-transfer')}", style="bold cyan")
     status = r.get("record_status", "")
     if status:
         header.append(f"  {status.upper()}", style=_status_color(status))
@@ -750,7 +723,7 @@ _register("bank-transfer", _bank_transfer_list, _bank_transfer_detail)
 
 def _fixed_asset_list(items):
     table = Table(title="Fixed Assets", show_lines=False)
-    table.add_column("#", style="bold", justify="right")
+    table.add_column("#", style="bold", justify="right", no_wrap=True)
     table.add_column("Name", min_width=20)
     table.add_column("Company")
     table.add_column("Purchase Date", justify="center")
@@ -759,7 +732,7 @@ def _fixed_asset_list(items):
 
     for r in items:
         table.add_row(
-            _fmt_id(r.get("internal_id"), "fixed-asset"),
+            _fmt_id(r, "fixed-asset"),
             r.get("name", "-"),
             r.get("company_name", "-"),
             r.get("purchase_date", "-"),
@@ -1629,7 +1602,7 @@ def _statistical_journal_list(items):
 
     for r in items:
         table.add_row(
-            _fmt_id(r.get("number"), "statistical-journal"),
+            _fmt_id(r, "statistical-journal"),
             str(r.get("date", "-")),
             str(r.get("period", "-")),
             str(r.get("account_number") or "-"),
@@ -1643,13 +1616,13 @@ def _statistical_journal_list(items):
 def _statistical_journal_detail(r):
     header = Text()
     header.append("STATISTICAL JOURNAL", style="bold")
-    header.append(f"  {_fmt_id(r.get('number'), 'statistical-journal')}", style="bold cyan")
+    header.append(f"  {_fmt_id(r, 'statistical-journal')}", style="bold cyan")
     console.print(Panel(header, expand=False))
 
     details = Table.grid(padding=(0, 2))
     details.add_column(style="dim", min_width=16)
     details.add_column()
-    details.add_row("Number:", _fmt_id(r.get("number"), "statistical-journal"))
+    details.add_row("Number:", _fmt_id(r, "statistical-journal"))
     details.add_row("Date:", str(r.get("date", "-")))
     details.add_row("Period:", str(r.get("period", "-")))
     details.add_row("Status:", _status_badge(r.get("record_status", "")))

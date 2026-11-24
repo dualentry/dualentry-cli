@@ -15,6 +15,7 @@
 - Update the CLI greeting logo to DualEntry
 - Add `export-jobs` commands (`create`, `list`, `get`, `wait`) for on-demand destination data refreshes via the public API
 - Fix `dualentry --install-completion` and `--show-completion` failing with "Shell detection not implemented for 'posix'" in the released binaries
+- Record IDs now show the record code the API returns (the one the web app shows, e.g. `IN-000123`), or the bare ID when the organization has no codes. `get` accepts any `XX-123` style prefix
 
 ## [0.1.18] - 2026-09-01
 

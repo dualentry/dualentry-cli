@@ -18,10 +18,10 @@ def mock_get_client():
 
 class TestInvoiceCommands:
     def test_invoices_list(self, mock_get_client):
-        mock_get_client.get.return_value = {"items": [{"internal_id": 42, "number": 1, "total": "100.00"}], "count": 1}
+        mock_get_client.get.return_value = {"items": [{"internal_id": 42, "code": "IN-000007", "number": 1, "total": "100.00"}], "count": 1}
         result = runner.invoke(app, ["invoices", "list"])
         assert result.exit_code == 0
-        assert "IN-42" in result.output
+        assert "IN-000007" in result.output
         mock_get_client.get.assert_called_once_with("/invoices/", params={"limit": 20, "offset": 0})
 
     def test_invoices_list_with_pagination(self, mock_get_client):
@@ -42,11 +42,18 @@ class TestInvoiceCommands:
         assert parsed == {"items": [], "count": 0}
 
     def test_invoices_get(self, mock_get_client):
-        mock_get_client.get.return_value = {"internal_id": 42, "number": 1, "total": "100.00"}
+        mock_get_client.get.return_value = {"internal_id": 42, "code": "IN-000007", "number": 1, "total": "100.00"}
         result = runner.invoke(app, ["invoices", "get", "1"])
         assert result.exit_code == 0
-        assert "IN-42" in result.output
+        assert "IN-000007" in result.output
         mock_get_client.get.assert_called_once_with("/invoices/1/")
+
+    def test_without_code_shows_bare_internal_id(self, mock_get_client):
+        mock_get_client.get.return_value = {"items": [{"internal_id": 42, "code": None, "number": 1}], "count": 1}
+        result = runner.invoke(app, ["invoices", "list"])
+        assert result.exit_code == 0
+        assert "42" in result.output
+        assert "IN-" not in result.output
 
     def test_invoices_create(self, mock_get_client, tmp_path):
         invoice_data = {"customer_id": 1, "lines": []}
@@ -133,6 +140,13 @@ class TestErrorHandling:
     def test_prefix_stripped_on_get(self, mock_get_client):
         mock_get_client.get.return_value = {"internal_id": 421163, "number": 3}
         result = runner.invoke(app, ["journal-entries", "get", "JE-3"])
+        assert result.exit_code == 0
+        mock_get_client.get.assert_called_once_with("/journal-entries/3/")
+
+    @pytest.mark.parametrize("value", ["PC-3", "rjE-3"])
+    def test_any_letter_prefix_is_stripped_on_get(self, value, mock_get_client):
+        mock_get_client.get.return_value = {"internal_id": 421163, "number": 3}
+        result = runner.invoke(app, ["journal-entries", "get", value])
         assert result.exit_code == 0
         mock_get_client.get.assert_called_once_with("/journal-entries/3/")
 

@@ -10,7 +10,7 @@ import typer
 
 from dualentry_cli.cli import HelpfulGroup, make_list_command_cls
 from dualentry_cli.client import _MAX_PAGES, Multipart
-from dualentry_cli.output import _NUMBER_PREFIXED, _RECORD_PREFIX, format_output, print_attachments
+from dualentry_cli.output import _NUMBER_PREFIXED, format_output, print_attachments
 
 if TYPE_CHECKING:
     from typer.models import OptionInfo
@@ -39,9 +39,6 @@ EndDate = typer.Option(None, "--end-date", help="Filter to date (YYYY-MM-DD)")
 Format = typer.Option("human", "--format", "-o", help="Output format: human or json")
 
 
-_PREFIX_TO_RESOURCE = {v: k for k, v in _RECORD_PREFIX.items()}
-
-
 def _resolve_by_internal_id(client, path: str, value: str) -> dict | None:
     """Try to find a record by internal_id when lookup by number fails."""
     if not value.isdigit():
@@ -59,11 +56,10 @@ def _resolve_by_internal_id(client, path: str, value: str) -> dict | None:
 
 
 def _strip_record_prefix(number: str) -> str:
-    """Strip display prefix from a record number (e.g. 'JE-1619031' → '1619031')."""
-    if "-" in number:
-        prefix, _, rest = number.partition("-")
-        if prefix.upper() in _PREFIX_TO_RESOURCE and rest.isdigit():
-            return rest
+    """Strip a letters-only display prefix (e.g. 'JE-1619031' → '1619031')."""
+    prefix, sep, rest = number.partition("-")
+    if sep and prefix.isascii() and prefix.isalpha() and rest.isascii() and rest.isdigit():
+        return rest
     return number
 
 
@@ -310,9 +306,8 @@ AttachmentFiles = typer.Option(
 
 def _record_number_arg(value: str, resource: str) -> str:
     """Attachment URLs use record #, not display ID (`IN-42` is rejected except `SJ-3`)."""
-    prefix = _RECORD_PREFIX.get(resource)
-    number_prefixed = resource in _NUMBER_PREFIXED
-    if number_prefixed and prefix:
+    prefix = _NUMBER_PREFIXED.get(resource)
+    if prefix:
         head, sep, rest = value.partition("-")
         if sep and head.upper() == prefix:
             value = rest
@@ -324,12 +319,10 @@ def _record_number_arg(value: str, resource: str) -> str:
 
 def _record_number_hint(resource: str) -> str:
     """Suffix for a bad record-number error."""
-    prefix = _RECORD_PREFIX.get(resource)
-    if not prefix:
-        return " from the # column"
-    if resource in _NUMBER_PREFIXED:
+    prefix = _NUMBER_PREFIXED.get(resource)
+    if prefix:
         return f" such as 3 or {prefix}-3"
-    return f" from the # column (not the {prefix}-… ID)"
+    return " from the # column (not the display ID)"
 
 
 def _read_attachment(path: Path) -> bytes:
@@ -372,8 +365,8 @@ def _upload_attachments(
 
 def _add_attachment_commands(app: typer.Typer, path: str, resource: str, *, replace: bool) -> None:
     """Add `add-attachments` and optionally `replace-attachments` to a resource app."""
-    prefix = _RECORD_PREFIX.get(resource)
-    number_help = f"Record number (the # column), e.g. 3 or {prefix}-3" if resource in _NUMBER_PREFIXED and prefix else "Record number (the # column)"
+    prefix = _NUMBER_PREFIXED.get(resource)
+    number_help = f"Record number (the # column), e.g. 3 or {prefix}-3" if prefix else "Record number (the # column)"
 
     @app.command("add-attachments")
     def add_attachments_cmd(
