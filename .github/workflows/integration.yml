@@ -1,0 +1,41 @@
+name: Integration
+
+# Runs the read-only live-API suite (tests/test_integration.py) against the API
+# set in the INTEGRATION_API_URL and INTEGRATION_API_KEY repository secrets.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  live-api:
+    # Fork PRs get no secrets.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DUALENTRY_API_URL: ${{ secrets.INTEGRATION_API_URL }}
+      X_API_KEY: ${{ secrets.INTEGRATION_API_KEY }}
+    steps:
+      # Without the key every test skips and the run would pass green.
+      - name: Require secrets
+        run: |
+          if [ -z "$DUALENTRY_API_URL" ] || [ -z "$X_API_KEY" ]; then
+            echo "::error::Set the INTEGRATION_API_URL and INTEGRATION_API_KEY repository secrets."
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync --dev --locked
+      - run: uv run pytest tests/test_integration.py -v --no-header
