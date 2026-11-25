@@ -40,6 +40,10 @@ def test_inbox_keeps_only_list():
     assert _commands("inbox") == {"list"}
 
 
+def test_classifications_lines_keeps_only_list():
+    assert _commands("classifications-lines") == {"list"}
+
+
 def test_paper_checks_has_no_number_lookups():
     assert not _commands("paper-checks") & {"get-number", "get-id"}
 

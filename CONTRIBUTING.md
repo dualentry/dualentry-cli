@@ -53,7 +53,8 @@ uv run pytest --cov=dualentry_cli --cov-report=term-missing
 3. Ensure linting and tests pass
 4. For user-facing changes, add a bullet under `## [Unreleased]` in `CHANGELOG.md`. CI fails PRs that touch `src/` without one; apply the `skip-changelog` label when the change isn't user-facing
 5. If you touched dependencies, run `uv lock` and commit `uv.lock`
-6. Open a PR against `main`
+6. Run your change against a real API and paste the evidence under `## Artifacts` in the PR description: the commands and their output, JSON responses, before/after for writes, or screenshots of the result in the app. Unit tests mock the API client, so they can't show the CLI and the API agree. CI fails PRs that touch `src/` without a code block or screenshot there; apply the `skip-artifacts` label when there is nothing to run. Redact secrets and use test data, since this repository is public
+7. Open a PR against `main`
 
 ## Releasing
 

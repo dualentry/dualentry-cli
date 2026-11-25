@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 
 import typer
 
 from dualentry_cli.cli import HelpfulGroup
-from dualentry_cli.commands import Format, _do_list, _load_json_file
+from dualentry_cli.commands import _FILTER_CLI_FLAGS, Format, ResumeFlag, _do_list, _load_json_file
 from dualentry_cli.output import format_output
 
 
@@ -22,10 +23,30 @@ def run_get(path: str, *, resource: str, output: str, params: dict | None = None
     format_output(data, resource=resource, fmt=output)
 
 
-def run_list(path: str, *, resource: str, limit: int, offset: int, all_pages: bool, output: str, **filters) -> None:
+def run_list(
+    path: str,
+    *,
+    resource: str,
+    limit: int,
+    offset: int,
+    all_pages: bool,
+    output: str,
+    resume_flags: Mapping[str, ResumeFlag] = _FILTER_CLI_FLAGS,
+    **filters,
+) -> None:
     from dualentry_cli.main import get_client
 
-    _do_list(get_client(), path.strip("/"), resource, limit=limit, offset=offset, all_pages=all_pages, output=output, **filters)
+    _do_list(
+        get_client(),
+        path.strip("/"),
+        resource,
+        limit=limit,
+        offset=offset,
+        all_pages=all_pages,
+        output=output,
+        resume_flags=resume_flags,
+        **filters,
+    )
 
 
 def run_post(path: str, *, resource: str, output: str, body: dict | None = None) -> None:
