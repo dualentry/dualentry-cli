@@ -24,6 +24,7 @@ FILTER_OPTIONS = {
     "company": ("--company", "-c"),
     "customer": ("--customer",),
     "vendor": ("--vendor",),
+    "adjusting_entry": ("--adjusting-entry",),
 }
 ALL_FILTERS = frozenset(FILTER_OPTIONS)
 
@@ -134,6 +135,17 @@ def csv_ints_option(flag: str, *, help_text: str) -> OptionInfo:
     return typer.Option(flag, parser=_parse_csv_ints, callback=_flatten_csv_ints, metavar="<ids>", help=help_text)
 
 
+def _true_or_false(value: str | None) -> str | None:
+    """Normalize a true/false filter value; None leaves the filter off."""
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if normalized not in {"true", "false"}:
+        msg = f"expected true or false, got {value!r}"
+        raise typer.BadParameter(msg)
+    return normalized
+
+
 def _build_filter_params(
     search: str | None = None,
     status: str | None = None,
@@ -171,6 +183,7 @@ _FILTER_CLI_FLAGS: dict[str, ResumeFlag] = {
     "company_id": "--company",
     "customer_id": "--customer",
     "vendor_id": "--vendor",
+    "is_adjusting_entry": "--adjusting-entry",
 }
 
 
@@ -458,6 +471,13 @@ def make_resource_app(
         company: str | None = typer.Option(None, "--company", "-c", help="Filter by company ID"),
         customer: str | None = typer.Option(None, "--customer", help="Filter by customer ID"),
         vendor: str | None = typer.Option(None, "--vendor", help="Filter by vendor ID"),
+        adjusting_entry: str | None = typer.Option(
+            None,
+            "--adjusting-entry",
+            metavar="true|false",
+            callback=_true_or_false,
+            help="true: only adjusting entries; false: only regular ones. Omit for both.",
+        ),
         output: str = Format,
     ):
         from dualentry_cli.main import get_client
@@ -479,6 +499,7 @@ def make_resource_app(
             company_id=_supplied(company),
             customer_id=_supplied(customer),
             vendor_id=_supplied(vendor),
+            is_adjusting_entry=_supplied(adjusting_entry),
         )
 
     list_cmd.__doc__ = f"List {name}."

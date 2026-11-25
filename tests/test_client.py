@@ -91,6 +91,23 @@ class TestErrorMessages:
         assert "customer_id" in exc.value.detail
 
     @respx.mock
+    def test_422_names_the_error_code(self):
+        from dualentry_cli.client import APIError, DualEntryClient
+
+        body = {
+            "success": False,
+            "errors": {"is_adjusting_entry": ["You do not have permission to post adjusting entries."]},
+            "error_code": "adjusting_entry_permission_required",
+            "error_reason": "You do not have the permission to post adjusting entries.",
+        }
+        respx.post("https://api.dualentry.com/public/v2/journal-entries/").mock(return_value=httpx.Response(422, json=body))
+        client = DualEntryClient(api_url="https://api.dualentry.com", api_key="test_key")
+        with pytest.raises(APIError) as exc:
+            client.post("/journal-entries/", json={"is_adjusting_entry": True})
+        assert "[adjusting_entry_permission_required]" in exc.value.detail
+        assert "You do not have permission to post adjusting entries." in exc.value.detail
+
+    @respx.mock
     def test_429_says_rate_limited(self):
         from dualentry_cli.client import APIError, DualEntryClient
 

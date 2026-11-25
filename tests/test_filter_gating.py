@@ -34,7 +34,7 @@ EXPECTED_FILTERS = {
     "vendor-prepayment-applications": TXN_VENDOR,
     "vendor-refunds": TXN_VENDOR,
     "direct-expenses": TXN_VENDOR,
-    "journal-entries": TXN_ALL_PARTIES,
+    "journal-entries": TXN_ALL_PARTIES | {"adjusting-entry"},
     "bank-transfers": TXN,
     "fixed-assets": {"search", "status", "company", "customer", "vendor"},
     "depreciation-books": set(),
@@ -57,7 +57,7 @@ EXPECTED_FILTERS = {
     "inbox": {"search"},
 }
 
-FILTER_FLAGS = {"search", "status", "start-date", "end-date", "company", "customer", "vendor"}
+FILTER_FLAGS = {"search", "status", "start-date", "end-date", "company", "customer", "vendor", "adjusting-entry"}
 
 
 def _plain(text: str) -> str:
@@ -186,3 +186,40 @@ class TestFactoryGuards:
 
         with pytest.raises(TypeError):
             make_resource_app("widgets", "widget", "widgets")
+
+
+class TestAdjustingEntryFilter:
+    @pytest.mark.parametrize(("value", "sent"), [("true", "true"), ("false", "false"), ("TRUE", "true"), ("False", "false")])
+    def test_value_maps_to_is_adjusting_entry(self, mock_get_client, value, sent):
+        result = runner.invoke(app, ["journal-entries", "list", "--adjusting-entry", value])
+        assert result.exit_code == 0, result.output
+        mock_get_client.get.assert_called_once_with("/journal-entries/", params={"is_adjusting_entry": sent, "limit": 20, "offset": 0})
+
+    def test_omitted_sends_no_filter(self, mock_get_client):
+        result = runner.invoke(app, ["journal-entries", "list"])
+        assert result.exit_code == 0, result.output
+        mock_get_client.get.assert_called_once_with("/journal-entries/", params={"limit": 20, "offset": 0})
+
+    def test_other_values_are_a_usage_error(self, mock_get_client):
+        result = runner.invoke(app, ["journal-entries", "list", "--adjusting-entry", "yes"])
+        assert result.exit_code == 2
+        assert "expected true or false" in _plain(result.output)
+        mock_get_client.get.assert_not_called()
+
+    @pytest.mark.parametrize("path", ["invoices", "intercompany-journal-entries", "recurring/journal-entries"])
+    def test_other_resources_reject_it(self, mock_get_client, path):
+        result = runner.invoke(app, [*path.split("/"), "list", "--adjusting-entry", "true"])
+        assert result.exit_code != 0
+        assert "does not support --adjusting-entry" in _plain(result.output)
+        mock_get_client.get.assert_not_called()
+
+    def test_help_lists_the_flag(self):
+        result = runner.invoke(app, ["journal-entries", "list", "--help"])
+        assert result.exit_code == 0
+        assert "--adjusting-entry" in _plain(result.output)
+
+    def test_all_resume_hint_keeps_the_filter(self):
+        from dualentry_cli.commands import _resume_all_command
+
+        cmd = _resume_all_command("journal-entries", 100000, {"is_adjusting_entry": "true"})
+        assert cmd == "dualentry journal-entries list --all --offset 100000 --adjusting-entry true"

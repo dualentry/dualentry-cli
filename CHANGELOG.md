@@ -11,6 +11,8 @@
 - Add `add-attachments` to the 13 transaction types whose API accepts file uploads, and `replace-attachments` to invoices. Files are checked against the 10 MiB limit before anything is sent
 - Fix attachment uploads failing with "Idempotency-Key is only supported on JSON requests". Uploads are sent without the key and retried only after a 429, so a retry cannot attach files twice
 - `statistical-journals add-attachments` now checks the 10 MiB limit before uploading, rejects folders, and rejects prefixes other than `SJ-`
+- `journal-entries list --adjusting-entry true|false` returns only adjusting entries, or only regular ones
+- Validation errors name the API `error_code` when the API returns one, e.g. `adjusting_entry_permission_required`
 - Line-item tables label the quantity column Quantity
 - Update the CLI greeting logo to DualEntry
 - Add `export-jobs` commands (`create`, `list`, `get`, `wait`) for on-demand destination data refreshes via the public API
